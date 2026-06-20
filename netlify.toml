@@ -2,6 +2,12 @@
   publish = "."
   functions = "netlify/functions"
 
+[functions]
+  node_bundler = "esbuild"
+
+[functions.bot]
+  node_bundler = "esbuild"
+
 [[redirects]]
   from = "/api/bot"
   to = "/.netlify/functions/bot"
