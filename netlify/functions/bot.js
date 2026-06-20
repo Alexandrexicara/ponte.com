@@ -1,4 +1,174 @@
 // Bot Telegram + API Escavador (Netlify Function)
+const https = require('https');
+
+const API_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiODlkNGNiYTQ3Mzg3NDFiOTA0ZjJmM2UzNjg0NGI4ZTU2OGRjZjBkMGMyZTcxZTdjNTdiNTIzNzk5ZWEzZTY4MjBiZGY1NDljZDYwMzhjOTEiLCJpYXQiOjE3ODE2NDQzNTUuMjM4NDI0LCJuYmYiOjE3ODE2NDQzNTUuMjM4NDI1LCJleHAiOjE4MTMyMDExOTkuMjM2Njc2LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.ssCp7b2NmDQ8rSPScMXZHoQ3VxNFvioav7qhOaJ1fiDixtA7OLkgM4dQDxgOq1oGya0JVUfiA7Dx7fAtvzI7zG3ExL4_bJ_qyLIKPHoexfZwBFULp4BzriXEXc48oAdHGB5N-UfaMoc0CQ5P0w8uX3J_N0Nb_4OpSaxHXP1nWERUsLvODed7SGdDv-mkoBOS-PVjEaL27AO4DrVuWu1gp4Ej3TUQ8gWW3MNRQb5TeBqhRNyNUIXBFRx_qtMxf88_wTCe--cZoECa0_AuMm5x6rld_aSHgAGljfK3wNDefKXa2v-fUcGSgUb1rnNFT4U2I9LiEkO9Npw5FpCzh52-prJ6orbTBlWgPflZt8JoNtAhH6xXeGhngmKNSAw_ckpQlStyDZ4oynXzTw6Nb9RMUIAb1DY902GUgBqNnwRYSbvnmD6vekSyzgcFwXMQX92T9F2PyFRikQA3b_dWgGfVN6gmzaAbieNN3WN_K123VzbRymiBNX9rz58LlM6H0VC4V86v2NL62036DCY6Kaqv1dRXQ0YSHKiQoek7KPAA2xdH3ftwVDR3Nx1GHjuwCqLmtQu1bdUV4NBukDUUH3dq35KLS8lCIhjzeiUoCoUqgGLKpRoxB1mvtIMH8d8p9CbGyONE5cZbO6w9c6r7f8PR7P_TBQwFIyHzUHHJAdC5IXE';
+const TG_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
+const SUPREMO = 'https://supremodoseteoriginal.com/?processo=';
+
+// Requisicao HTTPS simples
+function req(host, path, method, headers, body) {
+  return new Promise(function(resolve, reject) {
+    var opts = { hostname: host, path: path, method: method, headers: headers || {} };
+    var r = https.request(opts, function(res) {
+      var d = '';
+      res.on('data', function(c) { d += c; });
+      res.on('end', function() {
+        try { resolve(JSON.parse(d)); } catch(e) { resolve({}); }
+      });
+    });
+    r.on('error', function(e) { reject(e); });
+    if (body) r.write(body);
+    r.end();
+  });
+}
+
+// Envia Telegram
+function sendTg(chatId, text) {
+  var body = JSON.stringify({ chat_id: chatId, text: text, disable_web_page_preview: true });
+  return req('api.telegram.org', '/bot' + TG_TOKEN + '/sendMessage', 'POST',
+    { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, body);
+}
+
+// Busca Escavador
+function buscar(tipo, valor) {
+  return req('api.escavador.com',
+    '/api/v2/envolvido/processos?' + tipo + '=' + encodeURIComponent(valor) + '&ordem=desc',
+    'GET',
+    { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
+}
+
+// Formata processo
+function fmt(p) {
+  var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
+  var tb = f ? f.nome : 'N/A';
+  var gr = f ? (f.grau_formatado || '') : '';
+  var cl = (f && f.capa) ? f.capa.classe : '';
+  var as = (f && f.capa) ? f.capa.assunto : '';
+  var og = (f && f.capa) ? f.capa.orgao_julgador : '';
+  var vl = (f && f.capa && f.capa.valor_causa) ? f.capa.valor_causa.valor_formatado : '';
+  var di = p.data_inicio || 'N/A';
+  var dm = p.data_ultima_movimentacao || 'N/A';
+  var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
+
+  var m = 'PROCESSO: ' + p.numero_cnj + '\n';
+  m += 'LINK: ' + lk + '\n';
+  m += 'TRIBUNAL: ' + tb + (gr ? ' - ' + gr : '') + '\n';
+  m += 'CLASSE: ' + cl + '\n';
+  m += 'ASSUNTO: ' + as + '\n';
+  m += 'VALOR: ' + (vl || 'N/I') + '\n';
+  m += 'DATA INICIO: ' + di + '\n';
+  m += 'DATA ULTIMO MOVIMENTO: ' + dm + '\n';
+  m += 'ORGAO JULGADOR: ' + og + '\n';
+  m += 'ULTIMA MOVIMENTACAO:\n  DATA: ' + dm + '\n';
+
+  if (f && f.envolvidos) {
+    var at = f.envolvidos.filter(function(e) { return e.polo === 'ATIVO'; });
+    var ps = f.envolvidos.filter(function(e) { return e.polo === 'PASSIVO'; });
+
+    if (at.length) {
+      m += '\nPOLO ATIVO:\n';
+      for (var i = 0; i < at.length; i++) {
+        m += '- NOME: ' + at[i].nome + '\n';
+        if (at[i].cpf) m += '  DOC: ' + at[i].cpf + '\n';
+        if (at[i].cnpj) m += '  DOC: ' + at[i].cnpj + '\n';
+        if (at[i].advogados) {
+          for (var j = 0; j < at[i].advogados.length; j++) {
+            m += '  ADVOGADO: ' + at[i].advogados[j].nome;
+            if (at[i].advogados[j].cpf) m += ' (CPF: ' + at[i].advogados[j].cpf + ')';
+            m += '\n';
+          }
+        }
+      }
+    }
+
+    if (ps.length) {
+      m += '\nPOLO PASSIVO:\n';
+      for (var k = 0; k < ps.length; k++) {
+        m += '- NOME: ' + ps[k].nome + '\n';
+        if (ps[k].cpf) m += '  DOC: ' + ps[k].cpf + '\n';
+        if (ps[k].cnpj) m += '  DOC: ' + ps[k].cnpj + '\n';
+      }
+    }
+  }
+  return m;
+}
+
+// Handler principal
+exports.handler = function(event, context, callback) {
+  // Se nao for POST, retorna 405
+  if (event.httpMethod !== 'POST') {
+    callback(null, { statusCode: 405, body: 'Method Not Allowed' });
+    return;
+  }
+
+  var body;
+  try {
+    body = JSON.parse(event.body || '{}');
+  } catch(e) {
+    callback(null, { statusCode: 400, body: 'Bad Request' });
+    return;
+  }
+
+  var msg = body.message;
+  if (!msg || !msg.text) {
+    callback(null, { statusCode: 200, body: 'OK' });
+    return;
+  }
+
+  var chatId = msg.chat.id;
+  var texto = msg.text.trim();
+
+  // Comandos
+  if (texto === '/start' || texto === '/inicio') {
+    sendTg(chatId, 'Bem-vindo! Envie um NOME ou CPF/CNPJ para buscar processos.').then(function() {
+      callback(null, { statusCode: 200, body: 'OK' });
+    }).catch(function(e) {
+      callback(null, { statusCode: 200, body: 'OK' });
+    });
+    return;
+  }
+
+  // Detecta tipo
+  var limpo = texto.replace(/\D/g, '');
+  var tipo = (limpo.length === 11 || limpo.length === 14) ? 'cpf_cnpj' : 'nome';
+
+  // Busca e envia
+  sendTg(chatId, 'Buscando...').then(function() {
+    return buscar(tipo, texto);
+  }).then(function(dados) {
+    if (!dados || !dados.items || dados.items.length === 0) {
+      return sendTg(chatId, 'Nenhum processo encontrado para: ' + texto);
+    }
+
+    // Info do envolvido
+    if (dados.envolvido_encontrado) {
+      var env = dados.envolvido_encontrado;
+      sendTg(chatId, 'Encontrado: ' + env.nome + '\nTotal: ' + env.quantidade_processos + ' processos');
+    }
+
+    // Envia processos (max 5)
+    var max = Math.min(dados.items.length, 5);
+    var chain = Promise.resolve();
+    for (var i = 0; i < max; i++) {
+      (function(idx) {
+        chain = chain.then(function() {
+          return sendTg(chatId, fmt(dados.items[idx]));
+        });
+      })(i);
+    }
+    return chain;
+  }).then(function() {
+    callback(null, { statusCode: 200, body: 'OK' });
+  }).catch(function(e) {
+    console.error('Erro:', e);
+    sendTg(chatId, 'Erro: ' + e.message).then(function() {
+      callback(null, { statusCode: 200, body: 'OK' });
+    }).catch(function() {
+      callback(null, { statusCode: 200, body: 'OK' });
+    });
+  });
+};
+// Bot Telegram + API Escavador (Netlify Function)
 // Recebe webhook do Telegram, busca na API Escavador e envia resultados
 // Usa modulo https nativo do Node.js (funciona em qualquer versao)
 
