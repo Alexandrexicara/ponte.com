@@ -23,10 +23,18 @@ function sendTg(id, txt) {
 }
 
 function buscar(tipo, valor) {
-  // Monta a query correta conforme o tipo de busca (cpf_cnpj, nome ou oab)
+  // Monta a query para busca por nome ou CPF/CNPJ (endpoint envolvido)
   var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc';
   return doReq('api.escavador.com',
     '/api/v2/envolvido/processos?' + query,
+    'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
+}
+
+function buscarOab(estado, numero) {
+  // Busca por OAB usa endpoint advogado com oab_estado e oab_numero separados
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc';
+  return doReq('api.escavador.com',
+    '/api/v2/advogado/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
@@ -78,17 +86,21 @@ exports.handler = function(event, context, callback) {
     sendTg(chatId, 'Envie um NOME, CPF/CNPJ ou use /oab UF+NUMERO (ex: /oab MS3616) para buscar processos.').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
     return;
   }
-  // Tratamento do comando /oab - extrai UF e número da OAB
+  // Tratamento do comando /oab - formato: /oab UF+NUMERO (ex: /oab MS3616)
   if (txt.toLowerCase().indexOf('/oab') === 0) {
-    var oabValor = txt.substring(4).trim();
-    if (!oabValor) {
-      sendTg(chatId, 'Formato correto: /oab UF+NUMERO (ex: /oab MS3616)').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
+    var oabRaw = txt.substring(4).trim();
+    // Extrai as 2 primeiras letras como estado e o restante como número
+    var match = oabRaw.match(/^([A-Za-z]{2})\s*(\d+)$/);
+    if (!oabRaw || !match) {
+      sendTg(chatId, 'Formato correto: /oab UF NUMERO (ex: /oab MS 3616 ou /oab MS3616)').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
       return;
     }
-    sendTg(chatId, 'Buscando OAB: ' + oabValor + '...').then(function() {
-      return buscar('oab', oabValor);
+    var oabEstado = match[1].toUpperCase();
+    var oabNumero = match[2];
+    sendTg(chatId, 'Buscando OAB: ' + oabEstado + '/' + oabNumero + '...').then(function() {
+      return buscarOab(oabEstado, oabNumero);
     }).then(function(dados) {
-      if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabValor); }
+      if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabEstado + '/' + oabNumero); }
       if (dados.envolvido_encontrado) { sendTg(chatId, 'Encontrado: ' + dados.envolvido_encontrado.nome + ' (' + dados.envolvido_encontrado.quantidade_processos + ' processos)'); }
       var promises = [];
       var max = Math.min(dados.items.length, 5);
