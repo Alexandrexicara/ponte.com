@@ -53,17 +53,17 @@ function sendDoc(chatId, filename, content) {
   });
 }
 
+// Busca por nome ou CPF/CNPJ (endpoint envolvido)
 function buscar(tipo, valor) {
-  // Busca por nome ou CPF/CNPJ (endpoint envolvido)
-  var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc&limit=100';
+  var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc';
   return doReq('api.escavador.com',
     '/api/v2/envolvido/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
-// Busca OAB com paginação (100 por página)
+// Busca OAB por página (sem limit pois endpoint advogado não aceita)
 function buscarOabPagina(estado, numero, pg) {
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&limit=100&page=' + pg;
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&page=' + pg;
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
@@ -76,55 +76,32 @@ function buscarOabTodos(estado, numero) {
     return buscarOabPagina(estado, numero, pg).then(function(dados) {
       if (dados && dados.items && dados.items.length > 0) {
         todos = todos.concat(dados.items);
-        // Continua paginando se houver próxima página e não passou de 500
+        // Continua se houver mais páginas e não passou de 500
         if (dados.meta && dados.meta.current_page < dados.meta.total_pages && todos.length < 500) {
           return pagina(pg + 1);
         }
       }
-      return { items: todos, total: todos.length };
+      return { items: todos, total: todos.length, advogado: dados ? dados.advogado_encontrado : null };
     });
   }
   return pagina(1);
 }
 
-// Formata processo para mensagem no Telegram
-function fmt(p) {
+// Formata processo curto para enviar no chat (com link clicável)
+function fmtCurto(p, idx) {
   var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
   var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
-  var m = 'PROCESSO: ' + p.numero_cnj + '\n';
-  m += 'LINK: ' + lk + '\n';
-  m += 'TRIBUNAL: ' + (f ? f.nome : 'N/A') + (f && f.grau_formatado ? ' - ' + f.grau_formatado : '') + '\n';
-  m += 'CLASSE: ' + (f && f.capa ? f.capa.classe : '') + '\n';
-  m += 'ASSUNTO: ' + (f && f.capa ? f.capa.assunto : '') + '\n';
-  m += 'VALOR: ' + (f && f.capa && f.capa.valor_causa ? f.capa.valor_causa.valor_formatado : 'N/I') + '\n';
-  m += 'DATA INICIO: ' + (p.data_inicio || 'N/A') + '\n';
-  m += 'DATA ULTIMO MOVIMENTO: ' + (p.data_ultima_movimentacao || 'N/A') + '\n';
-  m += 'ORGAO JULGADOR: ' + (f && f.capa ? f.capa.orgao_julgador : '') + '\n';
-  m += 'ULTIMA MOVIMENTACAO:\n  DATA: ' + (p.data_ultima_movimentacao || 'N/A') + '\n';
-  if (f && f.envolvidos) {
-    var at = [], ps = [];
-    for (var i = 0; i < f.envolvidos.length; i++) {
-      if (f.envolvidos[i].polo === 'ATIVO') at.push(f.envolvidos[i]);
-      if (f.envolvidos[i].polo === 'PASSIVO') ps.push(f.envolvidos[i]);
-    }
-    if (at.length) {
-      m += '\nPOLO ATIVO:\n';
-      for (var j = 0; j < at.length; j++) {
-        m += '- NOME: ' + at[j].nome + '\n';
-        if (at[j].cpf) m += '  DOC: ' + at[j].cpf + '\n';
-        if (at[j].cnpj) m += '  DOC: ' + at[j].cnpj + '\n';
-        if (at[j].advogados) { for (var k = 0; k < at[j].advogados.length; k++) { m += '  ADVOGADO: ' + at[j].advogados[k].nome + (at[j].advogados[k].cpf ? ' (CPF: ' + at[j].advogados[k].cpf + ')' : '') + '\n'; } }
-      }
-    }
-    if (ps.length) {
-      m += '\nPOLO PASSIVO:\n';
-      for (var x = 0; x < ps.length; x++) { m += '- NOME: ' + ps[x].nome + '\n'; if (ps[x].cpf) m += '  DOC: ' + ps[x].cpf + '\n'; if (ps[x].cnpj) m += '  DOC: ' + ps[x].cnpj + '\n'; }
-    }
-  }
+  var tribunal = f ? f.nome : 'N/A';
+  if (f && f.grau_formatado) tribunal += ' - ' + f.grau_formatado;
+  var classe = (f && f.capa) ? f.capa.classe : '';
+  var m = idx + '. ' + p.numero_cnj + '\n';
+  m += tribunal + '\n';
+  m += classe + '\n';
+  m += 'ALVARA: ' + lk;
   return m;
 }
 
-// Formata processo para linha no TXT (resumo com link do alvará)
+// Formata processo detalhado para o TXT
 function fmtTxt(p, idx) {
   var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
   var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
@@ -134,7 +111,6 @@ function fmtTxt(p, idx) {
   var assunto = (f && f.capa) ? f.capa.assunto : '';
   var valor = (f && f.capa && f.capa.valor_causa) ? f.capa.valor_causa.valor_formatado : 'N/I';
   var orgao = (f && f.capa) ? f.capa.orgao_julgador : '';
-  // Monta linha do TXT
   var linha = idx + '. PROCESSO: ' + p.numero_cnj + '\n';
   linha += '   LINK ALVARA: ' + lk + '\n';
   linha += '   TRIBUNAL: ' + tribunal + '\n';
@@ -174,9 +150,10 @@ function fmtTxt(p, idx) {
 }
 
 // Gera conteúdo completo do TXT com todos os processos
-function gerarTxt(processos, oabLabel) {
+function gerarTxt(processos, oabLabel, advogado) {
   var txt = '=================================================\n';
   txt += 'RELATORIO DE PROCESSOS - OAB ' + oabLabel + '\n';
+  if (advogado) txt += 'ADVOGADO: ' + advogado.nome + '\n';
   txt += 'TOTAL: ' + processos.length + ' processos encontrados\n';
   txt += 'Data: ' + new Date().toLocaleString('pt-BR') + '\n';
   txt += '=================================================\n\n';
@@ -187,6 +164,43 @@ function gerarTxt(processos, oabLabel) {
   txt += 'FIM DO RELATORIO\n';
   txt += '=================================================\n';
   return txt;
+}
+
+// Formata processo para mensagem no Telegram (fluxo normal nome/cpf)
+function fmt(p) {
+  var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
+  var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
+  var m = 'PROCESSO: ' + p.numero_cnj + '\n';
+  m += 'LINK: ' + lk + '\n';
+  m += 'TRIBUNAL: ' + (f ? f.nome : 'N/A') + (f && f.grau_formatado ? ' - ' + f.grau_formatado : '') + '\n';
+  m += 'CLASSE: ' + (f && f.capa ? f.capa.classe : '') + '\n';
+  m += 'ASSUNTO: ' + (f && f.capa ? f.capa.assunto : '') + '\n';
+  m += 'VALOR: ' + (f && f.capa && f.capa.valor_causa ? f.capa.valor_causa.valor_formatado : 'N/I') + '\n';
+  m += 'DATA INICIO: ' + (p.data_inicio || 'N/A') + '\n';
+  m += 'DATA ULTIMO MOVIMENTO: ' + (p.data_ultima_movimentacao || 'N/A') + '\n';
+  m += 'ORGAO JULGADOR: ' + (f && f.capa ? f.capa.orgao_julgador : '') + '\n';
+  m += 'ULTIMA MOVIMENTACAO:\n  DATA: ' + (p.data_ultima_movimentacao || 'N/A') + '\n';
+  if (f && f.envolvidos) {
+    var at = [], ps = [];
+    for (var i = 0; i < f.envolvidos.length; i++) {
+      if (f.envolvidos[i].polo === 'ATIVO') at.push(f.envolvidos[i]);
+      if (f.envolvidos[i].polo === 'PASSIVO') ps.push(f.envolvidos[i]);
+    }
+    if (at.length) {
+      m += '\nPOLO ATIVO:\n';
+      for (var j = 0; j < at.length; j++) {
+        m += '- NOME: ' + at[j].nome + '\n';
+        if (at[j].cpf) m += '  DOC: ' + at[j].cpf + '\n';
+        if (at[j].cnpj) m += '  DOC: ' + at[j].cnpj + '\n';
+        if (at[j].advogados) { for (var k = 0; k < at[j].advogados.length; k++) { m += '  ADVOGADO: ' + at[j].advogados[k].nome + (at[j].advogados[k].cpf ? ' (CPF: ' + at[j].advogados[k].cpf + ')' : '') + '\n'; } }
+      }
+    }
+    if (ps.length) {
+      m += '\nPOLO PASSIVO:\n';
+      for (var x = 0; x < ps.length; x++) { m += '- NOME: ' + ps[x].nome + '\n'; if (ps[x].cpf) m += '  DOC: ' + ps[x].cpf + '\n'; if (ps[x].cnpj) m += '  DOC: ' + ps[x].cnpj + '\n'; }
+    }
+  }
+  return m;
 }
 
 exports.handler = function(event, context, callback) {
@@ -204,7 +218,6 @@ exports.handler = function(event, context, callback) {
   // Tratamento do comando /oab - formato: /oab UF+NUMERO (ex: /oab MS3616)
   if (txt.toLowerCase().indexOf('/oab') === 0) {
     var oabRaw = txt.substring(4).trim();
-    // Extrai as 2 primeiras letras como estado e o restante como número
     var match = oabRaw.match(/^([A-Za-z]{2})\s*(\d+)$/);
     if (!oabRaw || !match) {
       sendTg(chatId, 'Formato correto: /oab UF NUMERO (ex: /oab MS 3616 ou /oab MS3616)').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
@@ -213,18 +226,33 @@ exports.handler = function(event, context, callback) {
     var oabEstado = match[1].toUpperCase();
     var oabNumero = match[2];
     var oabLabel = oabEstado + '/' + oabNumero;
-    sendTg(chatId, 'Buscando TODOS os processos da OAB ' + oabLabel + '...\nAguarde, isso pode levar alguns segundos.').then(function() {
+    sendTg(chatId, 'Buscando TODOS os processos da OAB ' + oabLabel + '...\nAguarde, pode levar alguns segundos.').then(function() {
       return buscarOabTodos(oabEstado, oabNumero);
     }).then(function(resultado) {
       if (!resultado || resultado.items.length === 0) {
         return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabLabel);
       }
       var total = resultado.items.length;
-      // Envia resumo no chat
-      var resumo = 'OAB ' + oabLabel + ' - Total: ' + total + ' processos encontrados.\nGerando arquivo TXT com todos os detalhes e links...';
+      var advNome = resultado.advogado ? resultado.advogado.nome : '';
+      // Envia resumo inicial
+      var resumo = 'OAB ' + oabLabel;
+      if (advNome) resumo += ' - ' + advNome;
+      resumo += '\nTotal: ' + total + ' processos encontrados.\n\nEnviando processos com links clicaveis...';
       return sendTg(chatId, resumo).then(function() {
-        // Gera o TXT com todos os processos e seus links individuais
-        var conteudoTxt = gerarTxt(resultado.items, oabLabel);
+        // Envia processos no chat (links clicáveis) em blocos de 5
+        var promises = [];
+        for (var i = 0; i < total; i += 5) {
+          var bloco = '';
+          for (var j = i; j < Math.min(i + 5, total); j++) {
+            bloco += fmtCurto(resultado.items[j], j + 1) + '\n\n';
+          }
+          promises.push(sendTg(chatId, bloco.trim()));
+        }
+        return Promise.all(promises);
+      }).then(function() {
+        // Envia também o TXT completo como arquivo para download
+        sendTg(chatId, 'Agora enviando o arquivo TXT completo...');
+        var conteudoTxt = gerarTxt(resultado.items, oabLabel, resultado.advogado);
         var nomeArquivo = 'processos_OAB_' + oabEstado + '_' + oabNumero + '.txt';
         return sendDoc(chatId, nomeArquivo, conteudoTxt);
       });
