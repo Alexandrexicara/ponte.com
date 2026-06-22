@@ -1,5 +1,6 @@
 ﻿var https = require('https');
 var API_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiODlkNGNiYTQ3Mzg3NDFiOTA0ZjJmM2UzNjg0NGI4ZTU2OGRjZjBkMGMyZTcxZTdjNTdiNTIzNzk5ZWEzZTY4MjBiZGY1NDljZDYwMzhjOTEiLCJpYXQiOjE3ODE2NDQzNTUuMjM4NDI0LCJuYmYiOjE3ODE2NDQzNTUuMjM4NDI1LCJleHAiOjE4MTMyMDExOTkuMjM2Njc2LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.ssCp7b2NmDQ8rSPScMXZHoQ3VxNFvioav7qhOaJ1fiDixtA7OLkgM4dQDxgOq1oGya0JVUfiA7Dx7fAtvzI7zG3ExL4_bJ_qyLIKPHoexfZwBFULp4BzriXEXc48oAdHGB5N-UfaMoc0CQ5P0w8uX3J_N0Nb_4OpSaxHXP1nWERUsLvODed7SGdDv-mkoBOS-PVjEaL27AO4DrVuWu1gp4Ej3TUQ8gWW3MNRQb5TeBqhRNyNUIXBFRx_qtMxf88_wTCe--cZoECa0_AuMm5x6rld_aSHgAGljfK3wNDefKXa2v-fUcGSgUb1rnNFT4U2I9LiEkO9Npw5FpCzh52-prJ6orbTBlWgPflZt8JoNtAhH6xXeGhngmKNSAw_ckpQlStyDZ4oynXzTw6Nb9RMUIAb1DY902GUgBqNnwRYSbvnmD6vekSyzgcFwXMQX92T9F2PyFRikQA3b_dWgGfVN6gmzaAbieNN3WN_K123VzbRymiBNX9rz58LlM6H0VC4V86v2NL62036DCY6Kaqv1dRXQ0YSHKiQoek7KPAA2xdH3ftwVDR3Nx1GHjuwCqLmtQu1bdUV4NBukDUUH3dq35KLS8lCIhjzeiUoCoUqgGLKpRoxB1mvtIMH8d8p9CbGyONE5cZbO6w9c6r7f8PR7P_TBQwFIyHzUHHJAdC5IXE';
+var VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
 var TG_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
 var SUPREMO = 'https://supremodoseteoriginal.com/?processo=';
 
@@ -53,7 +54,7 @@ function sendDoc(chatId, filename, content) {
   });
 }
 
-// Busca por nome ou CPF/CNPJ (endpoint envolvido)
+// Busca por nome ou CPF/CNPJ no Escavador (endpoint envolvido)
 function buscar(tipo, valor) {
   var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc';
   return doReq('api.escavador.com',
@@ -61,44 +62,79 @@ function buscar(tipo, valor) {
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
-// Busca OAB por página (sem limit pois endpoint advogado não aceita)
-function buscarOabPagina(estado, numero, pg) {
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&page=' + pg;
+// Busca por CPF na API Vigilant (barato: R$0,10/tribunal, cache 2 dias gratis)
+function buscarVigilant(cpf) {
+  var cpfLimpo = cpf.replace(/\D/g, '');
+  var b = JSON.stringify({ document: cpfLimpo, courts: ['TJSP', 'TJRJ', 'TJMG', 'TJRS', 'TJPR'], force_refresh: false });
+  return doReq('vigilant.trackjud.com.br', '/api/v1/consults', 'POST',
+    { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + VIGILANT_KEY, 'Content-Length': Buffer.byteLength(b) }, b);
+}
+
+// Formata processo do Vigilant para mensagem no Telegram
+function fmtVigilant(proc, tribunal) {
+  var lk = SUPREMO + encodeURIComponent(proc.numero_processo_unico);
+  var m = 'PROCESSO: ' + proc.numero_processo_unico + '\n';
+  m += 'LINK: ' + lk + '\n';
+  m += 'TRIBUNAL: ' + tribunal + '\n';
+  m += 'CLASSE: ' + (proc.classe || '') + '\n';
+  m += 'SITUACAO: ' + (proc.situacao || 'N/A') + '\n';
+  if (proc.assuntos && proc.assuntos.length) {
+    m += 'ASSUNTO: ' + proc.assuntos.map(function(a) { return a.ds_assunto; }).join(', ') + '\n';
+  }
+  m += 'VALOR: ' + (proc.valor_causa || 'N/I') + '\n';
+  m += 'DATA INICIO: ' + (proc.distribuido_em || 'N/A') + '\n';
+  if (proc.partes && proc.partes.length) {
+    var autores = [], reus = [];
+    for (var i = 0; i < proc.partes.length; i++) {
+      if (proc.partes[i].tipo === 'Autor') autores.push(proc.partes[i].nome);
+      else reus.push(proc.partes[i].nome);
+    }
+    if (autores.length) m += '\nPOLO ATIVO:\n- ' + autores.join('\n- ') + '\n';
+    if (reus.length) m += '\nPOLO PASSIVO:\n- ' + reus.join('\n- ') + '\n';
+  }
+  if (proc.movimentos && proc.movimentos.length) {
+    m += '\nULTIMAS MOVIMENTACOES:\n';
+    var maxMov = Math.min(proc.movimentos.length, 3);
+    for (var j = 0; j < maxMov; j++) {
+      m += '  ' + proc.movimentos[j].data_movimento + ' - ' + proc.movimentos[j].descricao + '\n';
+    }
+  }
+  return m;
+}
+
+// Busca OAB por página usando cursor (paginação por cursor da API Escavador)
+function buscarOabPagina(estado, numero, cursor) {
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc';
+  if (cursor) query += '&cursor=' + cursor;
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
-// Busca TODOS os processos da OAB paginando automaticamente (máx 500)
+// Extrai o cursor da URL do links.next da API
+function extrairCursor(links) {
+  if (!links || !links.next) return null;
+  var match = links.next.match(/cursor=([^&]+)/);
+  return match ? match[1] : null;
+}
+
+// Busca TODOS os processos da OAB paginando por cursor (máx 100)
 function buscarOabTodos(estado, numero) {
   var todos = [];
-  function pagina(pg) {
-    return buscarOabPagina(estado, numero, pg).then(function(dados) {
+  function pagina(cursor) {
+    return buscarOabPagina(estado, numero, cursor).then(function(dados) {
       if (dados && dados.items && dados.items.length > 0) {
         todos = todos.concat(dados.items);
-        // Continua se houver mais páginas e não passou de 500
-        if (dados.meta && dados.meta.current_page < dados.meta.total_pages && todos.length < 500) {
-          return pagina(pg + 1);
+        // Continua se houver próximo cursor e não passou de 100
+        var proximoCursor = extrairCursor(dados.links);
+        if (proximoCursor && todos.length < 100) {
+          return pagina(proximoCursor);
         }
       }
       return { items: todos, total: todos.length, advogado: dados ? dados.advogado_encontrado : null };
     });
   }
-  return pagina(1);
-}
-
-// Formata processo curto para enviar no chat (com link clicável)
-function fmtCurto(p, idx) {
-  var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
-  var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
-  var tribunal = f ? f.nome : 'N/A';
-  if (f && f.grau_formatado) tribunal += ' - ' + f.grau_formatado;
-  var classe = (f && f.capa) ? f.capa.classe : '';
-  var m = idx + '. ' + p.numero_cnj + '\n';
-  m += tribunal + '\n';
-  m += classe + '\n';
-  m += 'ALVARA: ' + lk;
-  return m;
+  return pagina(null);
 }
 
 // Formata processo detalhado para o TXT
@@ -239,14 +275,11 @@ exports.handler = function(event, context, callback) {
       if (advNome) resumo += ' - ' + advNome;
       resumo += '\nTotal: ' + total + ' processos encontrados.\n\nEnviando processos com links clicaveis...';
       return sendTg(chatId, resumo).then(function() {
-        // Envia processos no chat (links clicáveis) em blocos de 5
+        // Envia cada processo completo no chat (um por mensagem, com todos os detalhes e link clicavel)
         var promises = [];
-        for (var i = 0; i < total; i += 5) {
-          var bloco = '';
-          for (var j = i; j < Math.min(i + 5, total); j++) {
-            bloco += fmtCurto(resultado.items[j], j + 1) + '\n\n';
-          }
-          promises.push(sendTg(chatId, bloco.trim()));
+        for (var i = 0; i < total; i++) {
+          var msg = '[' + (i + 1) + '/' + total + ']\n' + fmt(resultado.items[i]);
+          promises.push(sendTg(chatId, msg));
         }
         return Promise.all(promises);
       }).then(function() {
@@ -262,9 +295,57 @@ exports.handler = function(event, context, callback) {
     });
     return;
   }
-  // Busca por nome ou CPF/CNPJ (fluxo normal)
+  // Busca por CPF, CNPJ ou nome
   var limpo = txt.replace(/\D/g, '');
-  var tipo = (limpo.length === 11 || limpo.length === 14) ? 'cpf_cnpj' : 'nome';
+  var isCpf = limpo.length === 11;
+  var isCnpj = limpo.length === 14;
+  var tipo = (isCpf || isCnpj) ? 'cpf_cnpj' : 'nome';
+
+  // FLUXO CPF: tenta Vigilant primeiro (barato), se nao achar vai pro Escavador
+  if (isCpf) {
+    sendTg(chatId, 'Buscando CPF... (Vigilant)').then(function() {
+      return buscarVigilant(limpo);
+    }).then(function(vigResult) {
+      // Extrai processos de todos os tribunais do resultado Vigilant
+      var processosVig = [];
+      if (vigResult && vigResult.data && vigResult.data.courts) {
+        for (var i = 0; i < vigResult.data.courts.length; i++) {
+          var court = vigResult.data.courts[i];
+          if (court.processes && court.processes.length > 0) {
+            for (var j = 0; j < court.processes.length; j++) {
+              processosVig.push({ proc: court.processes[j], tribunal: court.court });
+            }
+          }
+        }
+      }
+      // Se Vigilant encontrou processos, envia e para
+      if (processosVig.length > 0) {
+        sendTg(chatId, 'Vigilant encontrou ' + processosVig.length + ' processos.\nFonte: Vigilant (economico)');
+        var promises = [];
+        for (var k = 0; k < processosVig.length; k++) {
+          var msg = '[' + (k + 1) + '/' + processosVig.length + ']\n' + fmtVigilant(processosVig[k].proc, processosVig[k].tribunal);
+          promises.push(sendTg(chatId, msg));
+        }
+        return Promise.all(promises);
+      }
+      // Vigilant nao achou nada, fallback pro Escavador
+      sendTg(chatId, 'Vigilant nao encontrou. Buscando no Escavador...');
+      return buscar('cpf_cnpj', limpo).then(function(dados) {
+        if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para CPF: ' + limpo); }
+        if (dados.envolvido_encontrado) { sendTg(chatId, 'Encontrado: ' + dados.envolvido_encontrado.nome + ' (' + dados.envolvido_encontrado.quantidade_processos + ' processos)'); }
+        var promises = [];
+        var max = Math.min(dados.items.length, 5);
+        for (var i = 0; i < max; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
+        return Promise.all(promises);
+      });
+    }).then(function() { callback(null, { statusCode: 200, body: 'OK' });
+    }).catch(function(e) {
+      sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { callback(null, { statusCode: 200, body: 'OK' }); }).catch(function() { callback(null, { statusCode: 200, body: 'OK' }); });
+    });
+    return;
+  }
+
+  // FLUXO NOME ou CNPJ: usa Escavador direto (Vigilant so busca CPF)
   sendTg(chatId, 'Buscando...').then(function() {
     return buscar(tipo, txt);
   }).then(function(dados) {
