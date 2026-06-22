@@ -22,22 +22,72 @@ function sendTg(id, txt) {
     { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) }, b);
 }
 
+// Envia arquivo TXT como documento no Telegram via multipart/form-data
+function sendDoc(chatId, filename, content) {
+  return new Promise(function(ok, fail) {
+    var boundary = '----FormBoundary' + Date.now().toString(16);
+    var buf = Buffer.from(content, 'utf8');
+    var head = '--' + boundary + '\r\n';
+    head += 'Content-Disposition: form-data; name="chat_id"\r\n\r\n' + chatId + '\r\n';
+    head += '--' + boundary + '\r\n';
+    head += 'Content-Disposition: form-data; name="document"; filename="' + filename + '"\r\n';
+    head += 'Content-Type: text/plain; charset=utf-8\r\n\r\n';
+    var tail = '\r\n--' + boundary + '--\r\n';
+    var bodyBuf = Buffer.concat([Buffer.from(head, 'utf8'), buf, Buffer.from(tail, 'utf8')]);
+    var r = https.request({
+      hostname: 'api.telegram.org',
+      path: '/bot' + TG_TOKEN + '/sendDocument',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'multipart/form-data; boundary=' + boundary,
+        'Content-Length': bodyBuf.length
+      }
+    }, function(res) {
+      var d = '';
+      res.on('data', function(c) { d += c; });
+      res.on('end', function() { try { ok(JSON.parse(d)); } catch(e) { ok({}); } });
+    });
+    r.on('error', fail);
+    r.write(bodyBuf);
+    r.end();
+  });
+}
+
 function buscar(tipo, valor) {
-  // Monta a query para busca por nome ou CPF/CNPJ (endpoint envolvido)
-  var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc';
+  // Busca por nome ou CPF/CNPJ (endpoint envolvido)
+  var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc&limit=100';
   return doReq('api.escavador.com',
     '/api/v2/envolvido/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
-function buscarOab(estado, numero) {
-  // Busca por OAB usa endpoint advogado com oab_estado e oab_numero separados
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc';
+// Busca OAB com paginação (100 por página)
+function buscarOabPagina(estado, numero, pg) {
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&limit=100&page=' + pg;
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
+// Busca TODOS os processos da OAB paginando automaticamente (máx 500)
+function buscarOabTodos(estado, numero) {
+  var todos = [];
+  function pagina(pg) {
+    return buscarOabPagina(estado, numero, pg).then(function(dados) {
+      if (dados && dados.items && dados.items.length > 0) {
+        todos = todos.concat(dados.items);
+        // Continua paginando se houver próxima página e não passou de 500
+        if (dados.meta && dados.meta.current_page < dados.meta.total_pages && todos.length < 500) {
+          return pagina(pg + 1);
+        }
+      }
+      return { items: todos, total: todos.length };
+    });
+  }
+  return pagina(1);
+}
+
+// Formata processo para mensagem no Telegram
 function fmt(p) {
   var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
   var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
@@ -74,6 +124,71 @@ function fmt(p) {
   return m;
 }
 
+// Formata processo para linha no TXT (resumo com link do alvará)
+function fmtTxt(p, idx) {
+  var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
+  var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
+  var tribunal = f ? f.nome : 'N/A';
+  if (f && f.grau_formatado) tribunal += ' - ' + f.grau_formatado;
+  var classe = (f && f.capa) ? f.capa.classe : '';
+  var assunto = (f && f.capa) ? f.capa.assunto : '';
+  var valor = (f && f.capa && f.capa.valor_causa) ? f.capa.valor_causa.valor_formatado : 'N/I';
+  var orgao = (f && f.capa) ? f.capa.orgao_julgador : '';
+  // Monta linha do TXT
+  var linha = idx + '. PROCESSO: ' + p.numero_cnj + '\n';
+  linha += '   LINK ALVARA: ' + lk + '\n';
+  linha += '   TRIBUNAL: ' + tribunal + '\n';
+  linha += '   CLASSE: ' + classe + '\n';
+  linha += '   ASSUNTO: ' + assunto + '\n';
+  linha += '   VALOR: ' + valor + '\n';
+  linha += '   DATA INICIO: ' + (p.data_inicio || 'N/A') + '\n';
+  linha += '   ULTIMO MOVIMENTO: ' + (p.data_ultima_movimentacao || 'N/A') + '\n';
+  linha += '   ORGAO: ' + orgao + '\n';
+  if (f && f.envolvidos) {
+    var at = [], ps = [];
+    for (var i = 0; i < f.envolvidos.length; i++) {
+      if (f.envolvidos[i].polo === 'ATIVO') at.push(f.envolvidos[i]);
+      if (f.envolvidos[i].polo === 'PASSIVO') ps.push(f.envolvidos[i]);
+    }
+    if (at.length) {
+      linha += '   POLO ATIVO:\n';
+      for (var j = 0; j < at.length; j++) {
+        linha += '     - ' + at[j].nome;
+        if (at[j].cpf) linha += ' (CPF: ' + at[j].cpf + ')';
+        if (at[j].cnpj) linha += ' (CNPJ: ' + at[j].cnpj + ')';
+        linha += '\n';
+      }
+    }
+    if (ps.length) {
+      linha += '   POLO PASSIVO:\n';
+      for (var x = 0; x < ps.length; x++) {
+        linha += '     - ' + ps[x].nome;
+        if (ps[x].cpf) linha += ' (CPF: ' + ps[x].cpf + ')';
+        if (ps[x].cnpj) linha += ' (CNPJ: ' + ps[x].cnpj + ')';
+        linha += '\n';
+      }
+    }
+  }
+  linha += '\n';
+  return linha;
+}
+
+// Gera conteúdo completo do TXT com todos os processos
+function gerarTxt(processos, oabLabel) {
+  var txt = '=================================================\n';
+  txt += 'RELATORIO DE PROCESSOS - OAB ' + oabLabel + '\n';
+  txt += 'TOTAL: ' + processos.length + ' processos encontrados\n';
+  txt += 'Data: ' + new Date().toLocaleString('pt-BR') + '\n';
+  txt += '=================================================\n\n';
+  for (var i = 0; i < processos.length; i++) {
+    txt += fmtTxt(processos[i], i + 1);
+  }
+  txt += '=================================================\n';
+  txt += 'FIM DO RELATORIO\n';
+  txt += '=================================================\n';
+  return txt;
+}
+
 exports.handler = function(event, context, callback) {
   if (event.httpMethod === 'GET') { callback(null, { statusCode: 200, body: 'Bot ativo!' }); return; }
   if (event.httpMethod !== 'POST') { callback(null, { statusCode: 405, body: 'No' }); return; }
@@ -97,21 +212,29 @@ exports.handler = function(event, context, callback) {
     }
     var oabEstado = match[1].toUpperCase();
     var oabNumero = match[2];
-    sendTg(chatId, 'Buscando OAB: ' + oabEstado + '/' + oabNumero + '...').then(function() {
-      return buscarOab(oabEstado, oabNumero);
-    }).then(function(dados) {
-      if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabEstado + '/' + oabNumero); }
-      if (dados.envolvido_encontrado) { sendTg(chatId, 'Encontrado: ' + dados.envolvido_encontrado.nome + ' (' + dados.envolvido_encontrado.quantidade_processos + ' processos)'); }
-      var promises = [];
-      var max = Math.min(dados.items.length, 5);
-      for (var i = 0; i < max; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
-      return Promise.all(promises);
+    var oabLabel = oabEstado + '/' + oabNumero;
+    sendTg(chatId, 'Buscando TODOS os processos da OAB ' + oabLabel + '...\nAguarde, isso pode levar alguns segundos.').then(function() {
+      return buscarOabTodos(oabEstado, oabNumero);
+    }).then(function(resultado) {
+      if (!resultado || resultado.items.length === 0) {
+        return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabLabel);
+      }
+      var total = resultado.items.length;
+      // Envia resumo no chat
+      var resumo = 'OAB ' + oabLabel + ' - Total: ' + total + ' processos encontrados.\nGerando arquivo TXT com todos os detalhes e links...';
+      return sendTg(chatId, resumo).then(function() {
+        // Gera o TXT com todos os processos e seus links individuais
+        var conteudoTxt = gerarTxt(resultado.items, oabLabel);
+        var nomeArquivo = 'processos_OAB_' + oabEstado + '_' + oabNumero + '.txt';
+        return sendDoc(chatId, nomeArquivo, conteudoTxt);
+      });
     }).then(function() { callback(null, { statusCode: 200, body: 'OK' });
     }).catch(function(e) {
       sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { callback(null, { statusCode: 200, body: 'OK' }); }).catch(function() { callback(null, { statusCode: 200, body: 'OK' }); });
     });
     return;
   }
+  // Busca por nome ou CPF/CNPJ (fluxo normal)
   var limpo = txt.replace(/\D/g, '');
   var tipo = (limpo.length === 11 || limpo.length === 14) ? 'cpf_cnpj' : 'nome';
   sendTg(chatId, 'Buscando...').then(function() {
@@ -128,4 +251,3 @@ exports.handler = function(event, context, callback) {
     sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { callback(null, { statusCode: 200, body: 'OK' }); }).catch(function() { callback(null, { statusCode: 200, body: 'OK' }); });
   });
 };
-
