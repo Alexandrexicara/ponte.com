@@ -352,7 +352,7 @@ exports.handler = function(event, context, callback) {
     if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para: ' + txt); }
     if (dados.envolvido_encontrado) { sendTg(chatId, 'Encontrado: ' + dados.envolvido_encontrado.nome + ' (' + dados.envolvido_encontrado.quantidade_processos + ' processos)'); }
     var promises = [];
-    var max = Math.min(dados.items.length, 5);
+    var max = Math.min(dados.items.length, 100);
     for (var i = 0; i < max; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
     return Promise.all(promises);
   }).then(function() { callback(null, { statusCode: 200, body: 'OK' });
