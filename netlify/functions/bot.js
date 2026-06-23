@@ -1,8 +1,12 @@
 ﻿var https = require('https');
 var API_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiODlkNGNiYTQ3Mzg3NDFiOTA0ZjJmM2UzNjg0NGI4ZTU2OGRjZjBkMGMyZTcxZTdjNTdiNTIzNzk5ZWEzZTY4MjBiZGY1NDljZDYwMzhjOTEiLCJpYXQiOjE3ODE2NDQzNTUuMjM4NDI0LCJuYmYiOjE3ODE2NDQzNTUuMjM4NDI1LCJleHAiOjE4MTMyMDExOTkuMjM2Njc2LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.ssCp7b2NmDQ8rSPScMXZHoQ3VxNFvioav7qhOaJ1fiDixtA7OLkgM4dQDxgOq1oGya0JVUfiA7Dx7fAtvzI7zG3ExL4_bJ_qyLIKPHoexfZwBFULp4BzriXEXc48oAdHGB5N-UfaMoc0CQ5P0w8uX3J_N0Nb_4OpSaxHXP1nWERUsLvODed7SGdDv-mkoBOS-PVjEaL27AO4DrVuWu1gp4Ej3TUQ8gWW3MNRQb5TeBqhRNyNUIXBFRx_qtMxf88_wTCe--cZoECa0_AuMm5x6rld_aSHgAGljfK3wNDefKXa2v-fUcGSgUb1rnNFT4U2I9LiEkO9Npw5FpCzh52-prJ6orbTBlWgPflZt8JoNtAhH6xXeGhngmKNSAw_ckpQlStyDZ4oynXzTw6Nb9RMUIAb1DY902GUgBqNnwRYSbvnmD6vekSyzgcFwXMQX92T9F2PyFRikQA3b_dWgGfVN6gmzaAbieNN3WN_K123VzbRymiBNX9rz58LlM6H0VC4V86v2NL62036DCY6Kaqv1dRXQ0YSHKiQoek7KPAA2xdH3ftwVDR3Nx1GHjuwCqLmtQu1bdUV4NBukDUUH3dq35KLS8lCIhjzeiUoCoUqgGLKpRoxB1mvtIMH8d8p9CbGyONE5cZbO6w9c6r7f8PR7P_TBQwFIyHzUHHJAdC5IXE';
 var VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
-var TG_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
+var TG_TOKEN = '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM';
 var SUPREMO = 'https://supremodoseteoriginal.com/?processo=';
+
+// Contador de buscas por usuário (em memória - não persiste entre reinícios da função)
+var contadorBuscas = {};
+var MAX_BUSCAS = 2;
 
 function doReq(host, path, method, headers, body) {
   return new Promise(function(ok, fail) {
@@ -251,6 +255,13 @@ exports.handler = function(event, context, callback) {
     sendTg(chatId, 'Envie um NOME, CPF/CNPJ ou use /oab UF+NUMERO (ex: /oab MS3616) para buscar processos.').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
     return;
   }
+  // Verifica limite de buscas por usuário (exceto comandos /start e /help)
+  if (!contadorBuscas[chatId]) contadorBuscas[chatId] = 0;
+  if (contadorBuscas[chatId] >= MAX_BUSCAS) {
+    sendTg(chatId, 'Você atingiu o limite de ' + MAX_BUSCAS + ' buscas. Entre em contato com o suporte para mais.').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
+    return;
+  }
+  contadorBuscas[chatId]++;
   // Tratamento do comando /oab - formato: /oab UF+NUMERO (ex: /oab MS3616)
   if (txt.toLowerCase().indexOf('/oab') === 0) {
     var oabRaw = txt.substring(4).trim();
