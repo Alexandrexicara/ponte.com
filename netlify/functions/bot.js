@@ -118,16 +118,16 @@ function extrairCursor(links) {
   return match ? match[1] : null;
 }
 
-// Busca TODOS os processos da OAB paginando por cursor (máx 100)
+// Busca TODOS os processos da OAB paginando por cursor (máx 200)
 function buscarOabTodos(estado, numero) {
   var todos = [];
   function pagina(cursor) {
     return buscarOabPagina(estado, numero, cursor).then(function(dados) {
       if (dados && dados.items && dados.items.length > 0) {
         todos = todos.concat(dados.items);
-        // Continua se houver próximo cursor e não passou de 100
+        // Continua se houver próximo cursor e não passou de 200
         var proximoCursor = extrairCursor(dados.links);
-        if (proximoCursor && todos.length < 100) {
+        if (proximoCursor && todos.length < 200) {
           return pagina(proximoCursor);
         }
       }
