@@ -4,10 +4,6 @@ var VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
 var TG_TOKEN = '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM';
 var SUPREMO = 'https://supremodoseteoriginal.com/?processo=';
 
-// Contador de buscas por usuário (em memória - não persiste entre reinícios da função)
-var contadorBuscas = {};
-var MAX_BUSCAS = 2;
-
 function doReq(host, path, method, headers, body) {
   return new Promise(function(ok, fail) {
     var r = https.request({ hostname: host, path: path, method: method, headers: headers || {} }, function(res) {
