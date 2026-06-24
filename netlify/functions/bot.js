@@ -1,7 +1,10 @@
 ﻿var https = require('https');
 var API_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiODlkNGNiYTQ3Mzg3NDFiOTA0ZjJmM2UzNjg0NGI4ZTU2OGRjZjBkMGMyZTcxZTdjNTdiNTIzNzk5ZWEzZTY4MjBiZGY1NDljZDYwMzhjOTEiLCJpYXQiOjE3ODE2NDQzNTUuMjM4NDI0LCJuYmYiOjE3ODE2NDQzNTUuMjM4NDI1LCJleHAiOjE4MTMyMDExOTkuMjM2Njc2LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.ssCp7b2NmDQ8rSPScMXZHoQ3VxNFvioav7qhOaJ1fiDixtA7OLkgM4dQDxgOq1oGya0JVUfiA7Dx7fAtvzI7zG3ExL4_bJ_qyLIKPHoexfZwBFULp4BzriXEXc48oAdHGB5N-UfaMoc0CQ5P0w8uX3J_N0Nb_4OpSaxHXP1nWERUsLvODed7SGdDv-mkoBOS-PVjEaL27AO4DrVuWu1gp4Ej3TUQ8gWW3MNRQb5TeBqhRNyNUIXBFRx_qtMxf88_wTCe--cZoECa0_AuMm5x6rld_aSHgAGljfK3wNDefKXa2v-fUcGSgUb1rnNFT4U2I9LiEkO9Npw5FpCzh52-prJ6orbTBlWgPflZt8JoNtAhH6xXeGhngmKNSAw_ckpQlStyDZ4oynXzTw6Nb9RMUIAb1DY902GUgBqNnwRYSbvnmD6vekSyzgcFwXMQX92T9F2PyFRikQA3b_dWgGfVN6gmzaAbieNN3WN_K123VzbRymiBNX9rz58LlM6H0VC4V86v2NL62036DCY6Kaqv1dRXQ0YSHKiQoek7KPAA2xdH3ftwVDR3Nx1GHjuwCqLmtQu1bdUV4NBukDUUH3dq35KLS8lCIhjzeiUoCoUqgGLKpRoxB1mvtIMH8d8p9CbGyONE5cZbO6w9c6r7f8PR7P_TBQwFIyHzUHHJAdC5IXE';
 var VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
-var TG_TOKEN = '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM';
+var TG_TOKENS = [
+  '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo',
+  '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM'
+];
 var SUPREMO = 'https://supremodoseteoriginal.com/?processo=';
 
 function doReq(host, path, method, headers, body) {
@@ -19,39 +22,47 @@ function doReq(host, path, method, headers, body) {
 
 function sendTg(id, txt) {
   var b = JSON.stringify({ chat_id: id, text: txt, disable_web_page_preview: true });
-  return doReq('api.telegram.org', '/bot' + TG_TOKEN + '/sendMessage', 'POST',
-    { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) }, b);
+  var promises = [];
+  for (var i = 0; i < TG_TOKENS.length; i++) {
+    promises.push(doReq('api.telegram.org', '/bot' + TG_TOKENS[i] + '/sendMessage', 'POST',
+      { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) }, b));
+  }
+  return Promise.all(promises);
 }
 
 // Envia arquivo TXT como documento no Telegram via multipart/form-data
 function sendDoc(chatId, filename, content) {
-  return new Promise(function(ok, fail) {
-    var boundary = '----FormBoundary' + Date.now().toString(16);
-    var buf = Buffer.from(content, 'utf8');
-    var head = '--' + boundary + '\r\n';
-    head += 'Content-Disposition: form-data; name="chat_id"\r\n\r\n' + chatId + '\r\n';
-    head += '--' + boundary + '\r\n';
-    head += 'Content-Disposition: form-data; name="document"; filename="' + filename + '"\r\n';
-    head += 'Content-Type: text/plain; charset=utf-8\r\n\r\n';
-    var tail = '\r\n--' + boundary + '--\r\n';
-    var bodyBuf = Buffer.concat([Buffer.from(head, 'utf8'), buf, Buffer.from(tail, 'utf8')]);
-    var r = https.request({
-      hostname: 'api.telegram.org',
-      path: '/bot' + TG_TOKEN + '/sendDocument',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'multipart/form-data; boundary=' + boundary,
-        'Content-Length': bodyBuf.length
-      }
-    }, function(res) {
-      var d = '';
-      res.on('data', function(c) { d += c; });
-      res.on('end', function() { try { ok(JSON.parse(d)); } catch(e) { ok({}); } });
-    });
-    r.on('error', fail);
-    r.write(bodyBuf);
-    r.end();
-  });
+  var promises = [];
+  for (var t = 0; t < TG_TOKENS.length; t++) {
+    promises.push(new Promise(function(ok, fail) {
+      var boundary = '----FormBoundary' + Date.now().toString(16);
+      var buf = Buffer.from(content, 'utf8');
+      var head = '--' + boundary + '\r\n';
+      head += 'Content-Disposition: form-data; name="chat_id"\r\n\r\n' + chatId + '\r\n';
+      head += '--' + boundary + '\r\n';
+      head += 'Content-Disposition: form-data; name="document"; filename="' + filename + '"\r\n';
+      head += 'Content-Type: text/plain; charset=utf-8\r\n\r\n';
+      var tail = '\r\n--' + boundary + '--\r\n';
+      var bodyBuf = Buffer.concat([Buffer.from(head, 'utf8'), buf, Buffer.from(tail, 'utf8')]);
+      var r = https.request({
+        hostname: 'api.telegram.org',
+        path: '/bot' + TG_TOKENS[t] + '/sendDocument',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data; boundary=' + boundary,
+          'Content-Length': bodyBuf.length
+        }
+      }, function(res) {
+        var d = '';
+        res.on('data', function(c) { d += c; });
+        res.on('end', function() { try { ok(JSON.parse(d)); } catch(e) { ok({}); } });
+      });
+      r.on('error', fail);
+      r.write(bodyBuf);
+      r.end();
+    }));
+  }
+  return Promise.all(promises);
 }
 
 // Busca por nome ou CPF/CNPJ no Escavador (endpoint envolvido)
