@@ -255,13 +255,6 @@ exports.handler = function(event, context, callback) {
     sendTg(chatId, 'Envie um NOME, CPF/CNPJ ou use /oab UF+NUMERO (ex: /oab MS3616) para buscar processos.').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
     return;
   }
-  // Verifica limite de buscas por usuário (exceto comandos /start e /help)
-  if (!contadorBuscas[chatId]) contadorBuscas[chatId] = 0;
-  if (contadorBuscas[chatId] >= MAX_BUSCAS) {
-    sendTg(chatId, 'Você atingiu o limite de ' + MAX_BUSCAS + ' buscas. Entre em contato com o suporte para mais.').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
-    return;
-  }
-  contadorBuscas[chatId]++;
   // Tratamento do comando /oab - formato: /oab UF+NUMERO (ex: /oab MS3616)
   if (txt.toLowerCase().indexOf('/oab') === 0) {
     var oabRaw = txt.substring(4).trim();
