@@ -115,10 +115,18 @@ function fmtVigilant(proc, tribunal) {
 
 // Busca OAB por página usando cursor (paginação por cursor da API Escavador)
 function buscarOabPagina(estado, numero, cursor) {
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc';
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&por_pagina=200';
   if (cursor) query += '&cursor=' + cursor;
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
+    'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
+}
+
+// Busca por nome ou CPF/CNPJ no Escavador (endpoint envolvido)
+function buscar(tipo, valor) {
+  var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc&por_pagina=200';
+  return doReq('api.escavador.com',
+    '/api/v2/envolvido/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
