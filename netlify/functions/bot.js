@@ -284,21 +284,21 @@ exports.handler = function(event, context, callback) {
       // Envia resumo inicial
       var resumo = 'OAB ' + oabLabel;
       if (advNome) resumo += ' - ' + advNome;
-      resumo += '\nTotal: ' + total + ' processos encontrados.\n\nEnviando processos com links clicaveis...';
+      resumo += '\nTotal: ' + total + ' processos encontrados.\n\nEnviando arquivo detalhes.txt...';
       return sendTg(chatId, resumo).then(function() {
-        // Envia cada processo completo no chat (um por mensagem, com todos os detalhes e link clicavel)
+        // Primeiro envia o TXT completo como arquivo para download
+        var conteudoTxt = gerarTxt(resultado.items, oabLabel, resultado.advogado);
+        var nomeArquivo = 'temp_' + oabEstado + oabNumero + '_detalhes.txt';
+        return sendDoc(chatId, nomeArquivo, conteudoTxt);
+      }).then(function() {
+        // Depois envia cada processo completo no chat (um por mensagem, com todos os detalhes e link clicavel)
+        sendTg(chatId, 'Enviando processos individuais...');
         var promises = [];
         for (var i = 0; i < total; i++) {
           var msg = '[' + (i + 1) + '/' + total + ']\n' + fmt(resultado.items[i]);
           promises.push(sendTg(chatId, msg));
         }
         return Promise.all(promises);
-      }).then(function() {
-        // Envia também o TXT completo como arquivo para download
-        sendTg(chatId, 'Agora enviando o arquivo TXT completo...');
-        var conteudoTxt = gerarTxt(resultado.items, oabLabel, resultado.advogado);
-        var nomeArquivo = 'processos_OAB_' + oabEstado + '_' + oabNumero + '.txt';
-        return sendDoc(chatId, nomeArquivo, conteudoTxt);
       });
     }).then(function() { callback(null, { statusCode: 200, body: 'OK' });
     }).catch(function(e) {
@@ -345,7 +345,7 @@ exports.handler = function(event, context, callback) {
         if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para CPF: ' + limpo); }
         if (dados.envolvido_encontrado) { sendTg(chatId, 'Encontrado: ' + dados.envolvido_encontrado.nome + ' (' + dados.envolvido_encontrado.quantidade_processos + ' processos)'); }
         var promises = [];
-        var max = Math.min(dados.items.length, 5);
+        var max = Math.min(dados.items.length, 100);
         for (var i = 0; i < max; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
         return Promise.all(promises);
       });
