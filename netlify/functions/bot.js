@@ -115,7 +115,7 @@ function fmtVigilant(proc, tribunal) {
 
 // Busca OAB por página usando cursor (paginação por cursor da API Escavador)
 function buscarOabPagina(estado, numero, cursor) {
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&por_pagina=200';
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc';
   if (cursor) query += '&cursor=' + cursor;
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
@@ -142,12 +142,10 @@ function buscarOabTodos(estado, numero) {
   var todos = [];
   function pagina(cursor) {
     return buscarOabPagina(estado, numero, cursor).then(function(dados) {
-      console.log('DEBUG OAB: items=' + (dados && dados.items ? dados.items.length : 0) + ', cursor=' + cursor + ', total acumulado=' + todos.length);
       if (dados && dados.items && dados.items.length > 0) {
         todos = todos.concat(dados.items);
         // Continua se houver próximo cursor e não passou de 200
         var proximoCursor = extrairCursor(dados.links);
-        console.log('DEBUG OAB: proximoCursor=' + proximoCursor + ', links=' + JSON.stringify(dados.links));
         if (proximoCursor && todos.length < 200) {
           return pagina(proximoCursor);
         }
