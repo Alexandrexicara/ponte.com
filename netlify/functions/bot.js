@@ -142,10 +142,12 @@ function buscarOabTodos(estado, numero) {
   var todos = [];
   function pagina(cursor) {
     return buscarOabPagina(estado, numero, cursor).then(function(dados) {
+      console.log('DEBUG OAB: items=' + (dados && dados.items ? dados.items.length : 0) + ', cursor=' + cursor + ', total acumulado=' + todos.length);
       if (dados && dados.items && dados.items.length > 0) {
         todos = todos.concat(dados.items);
         // Continua se houver próximo cursor e não passou de 200
         var proximoCursor = extrairCursor(dados.links);
+        console.log('DEBUG OAB: proximoCursor=' + proximoCursor + ', links=' + JSON.stringify(dados.links));
         if (proximoCursor && todos.length < 200) {
           return pagina(proximoCursor);
         }
