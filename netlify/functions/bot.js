@@ -187,6 +187,7 @@ function fmtTxt(p, idx) {
         linha += '     - ' + at[j].nome;
         if (at[j].cpf) linha += ' (CPF: ' + at[j].cpf + ')';
         if (at[j].cnpj) linha += ' (CNPJ: ' + at[j].cnpj + ')';
+        if (at[j].telefones && at[j].telefones.length) linha += ' (TEL: ' + at[j].telefones.join(', ') + ')';
         linha += '\n';
       }
     }
@@ -196,6 +197,7 @@ function fmtTxt(p, idx) {
         linha += '     - ' + ps[x].nome;
         if (ps[x].cpf) linha += ' (CPF: ' + ps[x].cpf + ')';
         if (ps[x].cnpj) linha += ' (CNPJ: ' + ps[x].cnpj + ')';
+        if (ps[x].telefones && ps[x].telefones.length) linha += ' (TEL: ' + ps[x].telefones.join(', ') + ')';
         linha += '\n';
       }
     }
@@ -247,12 +249,18 @@ function fmt(p) {
         m += '- NOME: ' + at[j].nome + '\n';
         if (at[j].cpf) m += '  DOC: ' + at[j].cpf + '\n';
         if (at[j].cnpj) m += '  DOC: ' + at[j].cnpj + '\n';
+        if (at[j].telefones && at[j].telefones.length) m += '  TEL: ' + at[j].telefones.join(', ') + '\n';
         if (at[j].advogados) { for (var k = 0; k < at[j].advogados.length; k++) { m += '  ADVOGADO: ' + at[j].advogados[k].nome + (at[j].advogados[k].cpf ? ' (CPF: ' + at[j].advogados[k].cpf + ')' : '') + '\n'; } }
       }
     }
     if (ps.length) {
       m += '\nPOLO PASSIVO:\n';
-      for (var x = 0; x < ps.length; x++) { m += '- NOME: ' + ps[x].nome + '\n'; if (ps[x].cpf) m += '  DOC: ' + ps[x].cpf + '\n'; if (ps[x].cnpj) m += '  DOC: ' + ps[x].cnpj + '\n'; }
+      for (var x = 0; x < ps.length; x++) {
+        m += '- NOME: ' + ps[x].nome + '\n';
+        if (ps[x].cpf) m += '  DOC: ' + ps[x].cpf + '\n';
+        if (ps[x].cnpj) m += '  DOC: ' + ps[x].cnpj + '\n';
+        if (ps[x].telefones && ps[x].telefones.length) m += '  TEL: ' + ps[x].telefones.join(', ') + '\n';
+      }
     }
   }
   return m;
