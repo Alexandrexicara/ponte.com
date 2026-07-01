@@ -139,11 +139,7 @@ function extrairCursor(links) {
 // Busca processos da OAB - uma única busca
 function buscarOabTodos(estado, numero) {
   return buscarOabPagina(estado, numero).then(function(dados) {
-    // Debug: verificar estrutura completa dos dados para encontrar campo de telefone
-    if (dados && dados.items && dados.items.length > 0) {
-      console.log('DEBUG ESTRUTURA:', JSON.stringify(dados.items[0]));
-    }
-    return { items: dados ? dados.items : [], total: dados && dados.items ? dados.items.length : 0, advogado: dados ? dados.advogado_encontrado : null };
+    return { items: dados ? dados.items : [], total: dados && dados.items ? dados.items.length : 0, advogado: dados ? dados.advogado_encontrado : null, debug: dados && dados.items && dados.items.length > 0 ? dados.items[0] : null };
   });
 }
 
@@ -284,6 +280,10 @@ exports.handler = function(event, context, callback) {
       }
       var total = resultado.items.length;
       var advNome = resultado.advogado ? resultado.advogado.nome : '';
+      // Envia debug da estrutura para ver campos de telefone
+      if (resultado.debug) {
+        sendTg(chatId, 'DEBUG ESTRUTURA: ' + JSON.stringify(resultado.debug));
+      }
       // Envia resumo inicial
       var resumo = 'OAB ' + oabLabel;
       if (advNome) resumo += ' - ' + advNome;
