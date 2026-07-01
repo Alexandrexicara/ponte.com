@@ -115,7 +115,7 @@ function fmtVigilant(proc, tribunal) {
 
 // Busca OAB por página usando paginação por número de página
 function buscarOabPagina(estado, numero, pagina) {
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&pagina=' + pagina;
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&pagina=' + pagina + '&por_pagina=200';
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
@@ -139,13 +139,26 @@ function extrairCursor(links) {
 // Busca TODOS os processos da OAB paginando por número de página (máx 200)
 function buscarOabTodos(estado, numero) {
   var todos = [];
+  var cnjsVistos = {}; // Para evitar duplicatas
   var paginaAtual = 1;
   function pagina() {
     return buscarOabPagina(estado, numero, paginaAtual).then(function(dados) {
       if (dados && dados.items && dados.items.length > 0) {
-        todos = todos.concat(dados.items);
-        // Continua se ainda tiver menos de 200 e retornou itens
-        if (todos.length < 200 && dados.items.length > 0) {
+        var novos = [];
+        for (var i = 0; i < dados.items.length; i++) {
+          var cnj = dados.items[i].numero_cnj;
+          if (!cnjsVistos[cnj]) {
+            cnjsVistos[cnj] = true;
+            novos.push(dados.items[i]);
+            // Debug: verificar campos de telefone
+            if (dados.items[i].fontes && dados.items[i].fontes[0] && dados.items[i].fontes[0].envolvidos) {
+              console.log('DEBUG TELEFONE processo ' + cnj + ':', JSON.stringify(dados.items[i].fontes[0].envolvidos[0]));
+            }
+          }
+        }
+        todos = todos.concat(novos);
+        // Continua se ainda tiver menos de 200 e retornou novos itens
+        if (todos.length < 200 && novos.length > 0) {
           paginaAtual++;
           return pagina();
         }
