@@ -113,10 +113,9 @@ function fmtVigilant(proc, tribunal) {
   return m;
 }
 
-// Busca OAB por página usando cursor (paginação por cursor da API Escavador)
-function buscarOabPagina(estado, numero, cursor) {
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc';
-  if (cursor) query += '&cursor=' + cursor;
+// Busca OAB por página usando paginação por número de página
+function buscarOabPagina(estado, numero, pagina) {
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&pagina=' + pagina;
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
@@ -137,23 +136,24 @@ function extrairCursor(links) {
   return match ? match[1] : null;
 }
 
-// Busca TODOS os processos da OAB paginando por cursor (máx 200)
+// Busca TODOS os processos da OAB paginando por número de página (máx 200)
 function buscarOabTodos(estado, numero) {
   var todos = [];
-  function pagina(cursor) {
-    return buscarOabPagina(estado, numero, cursor).then(function(dados) {
+  var paginaAtual = 1;
+  function pagina() {
+    return buscarOabPagina(estado, numero, paginaAtual).then(function(dados) {
       if (dados && dados.items && dados.items.length > 0) {
         todos = todos.concat(dados.items);
-        // Continua se houver próximo cursor e não passou de 200
-        var proximoCursor = extrairCursor(dados.links);
-        if (proximoCursor && todos.length < 200) {
-          return pagina(proximoCursor);
+        // Continua se ainda tiver menos de 200 e retornou itens
+        if (todos.length < 200 && dados.items.length > 0) {
+          paginaAtual++;
+          return pagina();
         }
       }
       return { items: todos, total: todos.length, advogado: dados ? dados.advogado_encontrado : null };
     });
   }
-  return pagina(null);
+  return pagina();
 }
 
 // Formata processo detalhado para o TXT
