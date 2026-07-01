@@ -113,9 +113,9 @@ function fmtVigilant(proc, tribunal) {
   return m;
 }
 
-// Busca OAB por página usando paginação por número de página
-function buscarOabPagina(estado, numero, pagina) {
-  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&pagina=' + pagina + '&por_pagina=200';
+// Busca OAB - uma única busca com até 200 processos
+function buscarOabPagina(estado, numero) {
+  var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&por_pagina=200';
   return doReq('api.escavador.com',
     '/api/v2/advogado/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
@@ -136,37 +136,15 @@ function extrairCursor(links) {
   return match ? match[1] : null;
 }
 
-// Busca TODOS os processos da OAB paginando por número de página (máx 200)
+// Busca processos da OAB - uma única busca
 function buscarOabTodos(estado, numero) {
-  var todos = [];
-  var cnjsVistos = {}; // Para evitar duplicatas
-  var paginaAtual = 1;
-  function pagina() {
-    return buscarOabPagina(estado, numero, paginaAtual).then(function(dados) {
-      if (dados && dados.items && dados.items.length > 0) {
-        var novos = [];
-        for (var i = 0; i < dados.items.length; i++) {
-          var cnj = dados.items[i].numero_cnj;
-          if (!cnjsVistos[cnj]) {
-            cnjsVistos[cnj] = true;
-            novos.push(dados.items[i]);
-            // Debug: verificar campos de telefone
-            if (dados.items[i].fontes && dados.items[i].fontes[0] && dados.items[i].fontes[0].envolvidos) {
-              console.log('DEBUG TELEFONE processo ' + cnj + ':', JSON.stringify(dados.items[i].fontes[0].envolvidos[0]));
-            }
-          }
-        }
-        todos = todos.concat(novos);
-        // Continua se ainda tiver menos de 200 e retornou novos itens
-        if (todos.length < 200 && novos.length > 0) {
-          paginaAtual++;
-          return pagina();
-        }
-      }
-      return { items: todos, total: todos.length, advogado: dados ? dados.advogado_encontrado : null };
-    });
-  }
-  return pagina();
+  return buscarOabPagina(estado, numero).then(function(dados) {
+    // Debug: verificar estrutura completa dos dados para encontrar campo de telefone
+    if (dados && dados.items && dados.items.length > 0) {
+      console.log('DEBUG ESTRUTURA:', JSON.stringify(dados.items[0]));
+    }
+    return { items: dados ? dados.items : [], total: dados && dados.items ? dados.items.length : 0, advogado: dados ? dados.advogado_encontrado : null };
+  });
 }
 
 // Formata processo detalhado para o TXT
@@ -200,7 +178,6 @@ function fmtTxt(p, idx) {
         linha += '     - ' + at[j].nome;
         if (at[j].cpf) linha += ' (CPF: ' + at[j].cpf + ')';
         if (at[j].cnpj) linha += ' (CNPJ: ' + at[j].cnpj + ')';
-        if (at[j].telefones && at[j].telefones.length) linha += ' (TEL: ' + at[j].telefones.join(', ') + ')';
         linha += '\n';
       }
     }
@@ -210,7 +187,6 @@ function fmtTxt(p, idx) {
         linha += '     - ' + ps[x].nome;
         if (ps[x].cpf) linha += ' (CPF: ' + ps[x].cpf + ')';
         if (ps[x].cnpj) linha += ' (CNPJ: ' + ps[x].cnpj + ')';
-        if (ps[x].telefones && ps[x].telefones.length) linha += ' (TEL: ' + ps[x].telefones.join(', ') + ')';
         linha += '\n';
       }
     }
@@ -262,7 +238,6 @@ function fmt(p) {
         m += '- NOME: ' + at[j].nome + '\n';
         if (at[j].cpf) m += '  DOC: ' + at[j].cpf + '\n';
         if (at[j].cnpj) m += '  DOC: ' + at[j].cnpj + '\n';
-        if (at[j].telefones && at[j].telefones.length) m += '  TEL: ' + at[j].telefones.join(', ') + '\n';
         if (at[j].advogados) { for (var k = 0; k < at[j].advogados.length; k++) { m += '  ADVOGADO: ' + at[j].advogados[k].nome + (at[j].advogados[k].cpf ? ' (CPF: ' + at[j].advogados[k].cpf + ')' : '') + '\n'; } }
       }
     }
@@ -272,7 +247,6 @@ function fmt(p) {
         m += '- NOME: ' + ps[x].nome + '\n';
         if (ps[x].cpf) m += '  DOC: ' + ps[x].cpf + '\n';
         if (ps[x].cnpj) m += '  DOC: ' + ps[x].cnpj + '\n';
-        if (ps[x].telefones && ps[x].telefones.length) m += '  TEL: ' + ps[x].telefones.join(', ') + '\n';
       }
     }
   }
