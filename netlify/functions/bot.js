@@ -281,8 +281,9 @@ exports.handler = function(event, context, callback) {
       var total = resultado.items.length;
       var advNome = resultado.advogado ? resultado.advogado.nome : '';
       // Envia debug da estrutura para ver campos de telefone
-      if (resultado.debug) {
-        sendTg(chatId, 'DEBUG ESTRUTURA: ' + JSON.stringify(resultado.debug));
+      if (resultado.debug && resultado.debug.fontes && resultado.debug.fontes[0] && resultado.debug.fontes[0].envolvidos && resultado.debug.fontes[0].envolvidos[0]) {
+        var envolvido = resultado.debug.fontes[0].envolvidos[0];
+        sendTg(chatId, 'DEBUG ENVOLVIDO: ' + JSON.stringify(envolvido));
       }
       // Envia resumo inicial
       var resumo = 'OAB ' + oabLabel;
