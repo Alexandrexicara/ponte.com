@@ -326,8 +326,6 @@ exports.handler = function(event, context, callback) {
     sendTg(chatId, '⏳ Buscando processos...').then(function() {
       return buscarOabTodos(oabEstado, oabNumero);
     }).then(function(resultado) {
-      // Log temporário para confirmar novo código
-      console.log('DEBUG: Novo código rodando, total processos:', resultado ? resultado.items.length : 0);
       if (!resultado || resultado.items.length === 0) {
         return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabLabel);
       }
