@@ -322,7 +322,7 @@ exports.handler = function(event, context, callback) {
     var oabEstado = match[1].toUpperCase();
     var oabNumero = match[2];
     var oabLabel = oabEstado + '/' + oabNumero;
-    sendTg(chatId, 'Buscando TODOS os processos da OAB ' + oabLabel + '...\nAguarde, pode levar alguns segundos.').then(function() {
+    sendTg(chatId, '⏳ Buscando processos...').then(function() {
       return buscarOabTodos(oabEstado, oabNumero);
     }).then(function(resultado) {
       if (!resultado || resultado.items.length === 0) {
@@ -330,24 +330,24 @@ exports.handler = function(event, context, callback) {
       }
       var total = resultado.items.length;
       var advNome = resultado.advogado ? resultado.advogado.nome : '';
-      // Envia resumo inicial
-      var resumo = 'OAB ' + oabLabel;
-      if (advNome) resumo += ' - ' + advNome;
-      resumo += '\nTotal: ' + total + ' processos encontrados.\n\nEnviando arquivo detalhes.txt...';
-      return sendTg(chatId, resumo).then(function() {
-        // Primeiro envia o TXT completo como arquivo para download
+      return sendTg(chatId, '✅ Encontrados ' + total + ' processos').then(function() {
+        return sendTg(chatId, '📄 Gerando arquivo detalhes.txt...');
+      }).then(function() {
+        // Envia apenas o TXT completo como arquivo para download
         var conteudoTxt = gerarTxt(resultado.items, oabLabel, resultado.advogado);
         var nomeArquivo = 'temp_' + oabEstado + oabNumero + '_detalhes.txt';
         return sendDoc(chatId, nomeArquivo, conteudoTxt);
       }).then(function() {
-        // Depois envia cada processo completo no chat (um por mensagem, com todos os detalhes e link clicavel)
-        sendTg(chatId, 'Enviando processos individuais...');
-        var promises = [];
-        for (var i = 0; i < total; i++) {
-          var msg = '[' + (i + 1) + '/' + total + ']\n' + fmt(resultado.items[i]);
-          promises.push(sendTg(chatId, msg));
-        }
-        return Promise.all(promises);
+        return sendTg(chatId, '📄 Arquivo detalhes.txt gerado');
+      }).then(function() {
+        var resumo = 'OAB: ' + oabLabel + '\n';
+        resumo += '📊 Processos: ' + total + '\n';
+        resumo += '📞 Telefones incluídos nos detalhes';
+        return sendTg(chatId, resumo);
+      }).then(function() {
+        return sendTg(chatId, '🔄 Preparando download dos documentos...');
+      }).then(function() {
+        return sendTg(chatId, '📦 DOWNLOAD DOS DOCUMENTOS\n(expira em 4 minutos)');
       });
     }).then(function() { callback(null, { statusCode: 200, body: 'OK' });
     }).catch(function(e) {
