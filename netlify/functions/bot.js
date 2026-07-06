@@ -332,9 +332,16 @@ exports.handler = function(event, context, callback) {
       var total = resultado.items.length;
       var advNome = resultado.advogado ? resultado.advogado.nome : '';
       return sendTg(chatId, '✅ Encontrados ' + total + ' processos').then(function() {
+        // Envia cada processo individualmente primeiro
+        var promises = [];
+        for (var i = 0; i < resultado.items.length; i++) {
+          promises.push(sendTg(chatId, fmt(resultado.items[i])));
+        }
+        return Promise.all(promises);
+      }).then(function() {
+        // Depois de enviar todas as mensagens, gera o TXT
         return sendTg(chatId, '📄 Gerando arquivo detalhes.txt...');
       }).then(function() {
-        // Envia apenas o TXT completo como arquivo para download
         var conteudoTxt = gerarTxt(resultado.items, oabLabel, resultado.advogado);
         var nomeArquivo = 'temp_' + oabEstado + oabNumero + '_detalhes.txt';
         return sendDoc(chatId, nomeArquivo, conteudoTxt);
