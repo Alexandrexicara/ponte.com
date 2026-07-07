@@ -117,7 +117,7 @@ function buscarOabPagina(estado, numero, cursor) {
 
 // Busca por nome ou CPF/CNPJ no Escavador (endpoint envolvido)
 function buscar(tipo, valor) {
-  var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc&por_pagina=500';
+  var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc&por_pagina=200';
   return doReq('api.escavador.com',
     '/api/v2/envolvido/processos?' + query,
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
