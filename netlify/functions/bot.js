@@ -13,6 +13,9 @@ function doReq(host, path, method, headers, body) {
     var r = https.request({ hostname: host, path: path, method: method, headers: headers || {} }, function(res) {
       var d = '';
       console.log('HTTP Status:', host + path, res.statusCode);
+      if (res.statusCode === 402) {
+        console.log('ERRO 402 - Payment Required em:', host);
+      }
       res.on('data', function(c) { d += c; });
       res.on('end', function() { try { ok(JSON.parse(d)); } catch(e) { ok({}); } });
     });
