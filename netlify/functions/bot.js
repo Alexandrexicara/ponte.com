@@ -300,18 +300,57 @@ function fmt(p) {
   return m;
 }
 
-exports.handler = function(event, context, callback) {
-  if (event.httpMethod === 'GET') { callback(null, { statusCode: 200, body: 'Bot ativo!' }); return; }
-  if (event.httpMethod !== 'POST') { callback(null, { statusCode: 405, body: 'No' }); return; }
+
+exports.handler = async function(event, context) {
+
+  if (event.httpMethod === 'GET') {
+    return {
+      statusCode: 200,
+      body: 'Bot ativo!'
+    };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: 'No'
+    };
+  }
+
   var body;
-  try { body = JSON.parse(event.body || '{}'); } catch(e) { callback(null, { statusCode: 200, body: 'OK' }); return; }
-  if (!body.message || !body.message.text) { callback(null, { statusCode: 200, body: 'OK' }); return; }
+
+  try {
+    body = JSON.parse(event.body || '{}');
+  } catch(e) {
+    return {
+      statusCode: 200,
+      body: 'OK'
+    };
+  }
+
+  if (!body.message || !body.message.text) {
+    return {
+      statusCode: 200,
+      body: 'OK'
+    };
+  }
+
   var chatId = body.message.chat.id;
   var txt = body.message.text.trim();
+
   if (txt === '/start' || txt === '/help') {
-    sendTg(chatId, 'Envie um NOME, CPF/CNPJ ou use /oab UF+NUMERO (ex: /oab MS3616) para buscar processos.').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
-    return;
+
+    await sendTg(
+      chatId,
+      'Envie um NOME, CPF/CNPJ ou use /oab UF+NUMERO (ex: /oab MS3616) para buscar processos.'
+    );
+
+    return {
+      statusCode: 200,
+      body: 'OK'
+    };
   }
+
   // Tratamento do comando /oab - formato: /oab UF+NUMERO (ex: /oab MS3616)
   if (txt.toLowerCase().indexOf('/oab') === 0) {
     var oabRaw = txt.substring(4).trim();
@@ -421,7 +460,10 @@ exports.handler = function(event, context, callback) {
     var promises = [];
     for (var i = 0; i < dados.items.length; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
     return Promise.all(promises);
-  }).then(function() { callback(null, { statusCode: 200, body: 'OK' });
+  }).then(function() { return {
+  statusCode: 200,
+  body: 'OK'
+};
   }).catch(function(e) {
     sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { callback(null, { statusCode: 200, body: 'OK' }); }).catch(function() { callback(null, { statusCode: 200, body: 'OK' }); });
   });
