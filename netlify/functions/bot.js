@@ -131,21 +131,56 @@ function extrairCursor(links) {
 }
 
 
-// Busca processos da OAB em uma única requisição
-function buscarOabTodos(estado, numero) {
 
-  return buscarOabPagina(estado, numero, null)
-    .then(function(dados) {
+// Busca TODOS os processos da OAB paginando por cursor (sem limite)
+function buscarOabTodos(estado, numero) {
+  var todos = [];
+  var cnjsVistos = {}; // Para evitar duplicatas
+
+  function pagina(cursor) {
+    return buscarOabPagina(estado, numero, cursor).then(function(dados) {
+
+      if (dados && dados.items && dados.items.length > 0) {
+
+        var novos = [];
+
+        for (var i = 0; i < dados.items.length; i++) {
+          var cnj = dados.items[i].numero_cnj;
+
+          if (!cnjsVistos[cnj]) {
+            cnjsVistos[cnj] = true;
+            novos.push(dados.items[i]);
+          }
+        }
+
+        todos = todos.concat(novos);
+
+        // Continua se houver próximo cursor
+        var proximoCursor = extrairCursor(dados.links);
+
+        if (proximoCursor) {
+          return pagina(proximoCursor);
+        }
+      }
 
       return {
-        items: dados.items || [],
-        total: (dados.items || []).length,
-        advogado: dados.advogado_encontrado || null
+        items: todos,
+        total: todos.length,
+        advogado: dados ? dados.advogado_encontrado : null
       };
 
     });
+  }
 
+  return pagina(null);
 }
+
+
+
+
+
+
+
 
 
 // Formata processo detalhado para o TXT
