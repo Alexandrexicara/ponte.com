@@ -69,7 +69,7 @@ function sendDoc(chatId, filename, content) {
 // Busca por CPF na API Vigilant (barato: R$0,10/tribunal, cache 2 dias gratis)
 function buscarVigilant(cpf) {
   var cpfLimpo = cpf.replace(/\D/g, '');
-  var b = JSON.stringify({ document: cpfLimpo, courts: ['TJSP', 'TJRJ', 'TJMG', 'TJRS', 'TJPR'], force_refresh: false });
+  var b = JSON.stringify({ document: cpfLimpo, force_refresh: false });
   return doReq('vigilant.trackjud.com.br', '/api/v1/consults', 'POST',
     { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + VIGILANT_KEY, 'Content-Length': Buffer.byteLength(b) }, b);
 }
@@ -395,7 +395,7 @@ exports.handler = async function(event, context) {
   var isCnpj = limpo.length === 14;
   var tipo = (isCpf || isCnpj) ? 'cpf_cnpj' : 'nome';
 
-  // FLUXO CPF: tenta Vigilant primeiro (barato), se nao achar vai pro Escavador
+  // FLUXO CPF: usa Vigilant (busca em todos os tribunais com 1 requisição)
   if (isCpf) {
     sendTg(chatId, 'Buscando CPF... (Vigilant)').then(function() {
       return buscarVigilant(limpo);
@@ -431,9 +431,18 @@ exports.handler = async function(event, context) {
         for (var i = 0; i < dados.items.length; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
         return Promise.all(promises);
       });
-    }).then(function() { callback(null, { statusCode: 200, body: 'OK' });
+    }).then(function() { return {
+  statusCode: 200,
+  body: 'OK'
+};
     }).catch(function(e) {
-      sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { callback(null, { statusCode: 200, body: 'OK' }); }).catch(function() { callback(null, { statusCode: 200, body: 'OK' }); });
+      sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { return {
+  statusCode: 200,
+  body: 'OK'
+}; }).catch(function() { return {
+  statusCode: 200,
+  body: 'OK'
+}; });
     });
     return;
   }
