@@ -1,12 +1,21 @@
-﻿var https = require('https');
-// Deploy atualizado: 2026-07-02
-var API_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiODlkNGNiYTQ3Mzg3NDFiOTA0ZjJmM2UzNjg0NGI4ZTU2OGRjZjBkMGMyZTcxZTdjNTdiNTIzNzk5ZWEzZTY4MjBiZGY1NDljZDYwMzhjOTEiLCJpYXQiOjE3ODE2NDQzNTUuMjM4NDI0LCJuYmYiOjE3ODE2NDQzNTUuMjM4NDI1LCJleHAiOjE4MTMyMDExOTkuMjM2Njc2LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.ssCp7b2NmDQ8rSPScMXZHoQ3VxNFvioav7qhOaJ1fiDixtA7OLkgM4dQDxgOq1oGya0JVUfiA7Dx7fAtvzI7zG3ExL4_bJ_qyLIKPHoexfZwBFULp4BzriXEXc48oAdHGB5N-UfaMoc0CQ5P0w8uX3J_N0Nb_4OpSaxHXP1nWERUsLvODed7SGdDv-mkoBOS-PVjEaL27AO4DrVuWu1gp4Ej3TUQ8gWW3MNRQb5TeBqhRNyNUIXBFRx_qtMxf88_wTCe--cZoECa0_AuMm5x6rld_aSHgAGljfK3wNDefKXa2v-fUcGSgUb1rnNFT4U2I9LiEkO9Npw5FpCzh52-prJ6orbTBlWgPflZt8JoNtAhH6xXeGhngmKNSAw_ckpQlStyDZ4oynXzTw6Nb9RMUIAb1DY902GUgBqNnwRYSbvnmD6vekSyzgcFwXMQX92T9F2PyFRikQA3b_dWgGfVN6gmzaAbieNN3WN_K123VzbRymiBNX9rz58LlM6H0VC4V86v2NL62036DCY6Kaqv1dRXQ0YSHKiQoek7KPAA2xdH3ftwVDR3Nx1GHjuwCqLmtQu1bdUV4NBukDUUH3dq35KLS8lCIhjzeiUoCoUqgGLKpRoxB1mvtIMH8d8p9CbGyONE5cZbO6w9c6r7f8PR7P_TBQwFIyHzUHHJAdC5IXE';
+﻿
+
+var https = require('https');
+// Deploy atualizado: 2026-07-15 - Versão corrigida e otimizada
+var API_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiODlkNGNiYTQ3Mzg3NDFiOTA0ZjJmM2UzNjg0NGI4ZTU2OGRjZjBkMGMyZTcxZTdjNTdiNTIzNzk5ZWEzZTY4MjBiZGY1NDljZDYwMzhjOTEiLCJpYXQiOjE3ODE2NDQzNTUuMjM4NDI0LCJuYmYiOjE3ODE2NDQzNTUuMjM4NDI1LCJleHAiOjE4MTMyMDExOTkuMjM2Njc2LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjY2VzYXJfYXBpX3BhZ2EiLCJhY2Nlc3NfYXBpX3BhZ2Vfcm91bmQiXX0.ssCp7b2NmDQ8rSPScMXZHoQ3VxNFvioav7qhOaJ1fiDixtA7OLkgM4dQDxgOq1oGya0JVUfiA7Dx7fAtvzI7zG3ExL4_bJ_qyLIKPHoexfZwBFULp4BzriXEXc48oAdHGB5N-UfaMoc0CQ5P0w8uX3J_N0Nb_4OpSaxHXP1nWERUsLvODed7SGdDv-mkoBOS-PVjEaL27AO4DrVuWu1gp4Ej3TUQ8gWW3MNRQb5TeBqhRNyNUIXBFRx_qtMxf88_wTCe--cZoECa0_AuMm5x6rld_aSHgAGljfK3wNDefKXa2v-fUcGSgUb1rnNFT4U2I9LiEkO9Npw5FpCzh52-prJ6orbTBlWgPflZt8JoNtAhH6xXeGhngmKNSAw_ckpQlStyDZ4oynXzTw6Nb9RMUIAb1DY902GUgBqNnwRYSbvnmD6vekSyzgcFwXMQX92T9F2PyFRikQA3b_dWgGfVN6gmzaAbieNN3WN_K123VzbRymiBNX9rz58LlM6H0VC4V86v2NL62036DCY6Kaqv1dRXQ0YSHKiQoek7KPAA2xdH3ftwVDR3Nx1GHjuwCqLmtQu1bdUV4NBukDUUH3dq35KLS8lCIhjzeiUoCoUqgGLKpRoxB1mvtIMH8d8p9CbGyONE5cZbO6w9c6r7f8PR7P_TBQwFIyHzUHHJAdC5IXE';
 var VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
 var TG_TOKENS = [
   '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo',
   '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM'
 ];
 var SUPREMO = 'https://supremodoseteoriginal.com/?processo=';
+
+// ========== FUNÇÃO AUXILIAR CORRIGIDA ==========
+function finalizarRequisicao(callback) {
+  if (typeof callback === 'function') {
+    callback(null, { statusCode: 200, body: 'OK' });
+  }
+}
 
 function doReq(host, path, method, headers, body) {
   return new Promise(function(ok, fail) {
@@ -31,7 +40,6 @@ function sendTg(id, txt) {
   return Promise.all(promises);
 }
 
-// Envia arquivo TXT como documento no Telegram via multipart/form-data
 function sendDoc(chatId, filename, content) {
   var promises = [];
   for (var t = 0; t < TG_TOKENS.length; t++) {
@@ -66,7 +74,6 @@ function sendDoc(chatId, filename, content) {
   return Promise.all(promises);
 }
 
-// Busca por CPF na API Vigilant (barato: R$0,10/tribunal, cache 2 dias gratis)
 function buscarVigilant(cpf) {
   var cpfLimpo = cpf.replace(/\D/g, '');
   var b = JSON.stringify({ document: cpfLimpo, force_refresh: false });
@@ -74,7 +81,6 @@ function buscarVigilant(cpf) {
     { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + VIGILANT_KEY, 'Content-Length': Buffer.byteLength(b) }, b);
 }
 
-// Formata processo do Vigilant para mensagem no Telegram
 function fmtVigilant(proc, tribunal) {
   var lk = SUPREMO + encodeURIComponent(proc.numero_processo_unico);
   var m = 'PROCESSO: ' + proc.numero_processo_unico + '\n';
@@ -106,7 +112,6 @@ function fmtVigilant(proc, tribunal) {
   return m;
 }
 
-// Busca OAB por página usando cursor (paginação por cursor da API Escavador)
 function buscarOabPagina(estado, numero, cursor) {
   var query = 'oab_estado=' + encodeURIComponent(estado) + '&oab_numero=' + encodeURIComponent(numero) + '&ordem=desc&por_pagina=200';
   if (cursor) query += '&cursor=' + cursor;
@@ -115,7 +120,32 @@ function buscarOabPagina(estado, numero, cursor) {
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
-// Busca por nome ou CPF/CNPJ no Escavador (endpoint envolvido)
+// ========== PAGINAÇÃO COMPLETA SEM LOOP ==========
+async function buscarOabTodos(estado, numero) {
+  var todosProcessos = [];
+  var advogadoDados = null;
+  var cursor = null;
+  var processados = new Set(); // Evita duplicatas
+  
+  do {
+    var resultado = await buscarOabPagina(estado, numero, cursor);
+    if (!resultado) break;
+    
+    if (resultado.advogado && !advogadoDados) advogadoDados = resultado.advogado;
+    if (resultado.items && resultado.items.length > 0) {
+      resultado.items.forEach(item => {
+        if (!processados.has(item.numero_cnj)) {
+          processados.add(item.numero_cnj);
+          todosProcessos.push(item);
+        }
+      });
+    }
+    cursor = extrairCursor(resultado.links);
+  } while (cursor); // Para automaticamente quando não houver mais páginas
+
+  return { items: todosProcessos, advogado: advogadoDados };
+}
+
 function buscar(tipo, valor) {
   var query = tipo + '=' + encodeURIComponent(valor) + '&ordem=desc&por_pagina=200';
   return doReq('api.escavador.com',
@@ -123,29 +153,12 @@ function buscar(tipo, valor) {
     'GET', { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_TOKEN, 'X-Requested-With': 'XMLHttpRequest' });
 }
 
-// Extrai o cursor da URL do links.next da API
 function extrairCursor(links) {
   if (!links || !links.next) return null;
   var match = links.next.match(/cursor=([^&]+)/);
   return match ? match[1] : null;
 }
 
-
-
-// Busca processos da OAB - apenas uma requisição
-function buscarOabTodos(estado, numero) {
-  return buscarOabPagina(estado, numero, null);
-}
-
-
-
-
-
-
-
-
-
-// Formata processo detalhado para o TXT
 function fmtTxt(p, idx) {
   var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
   var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
@@ -176,14 +189,9 @@ function fmtTxt(p, idx) {
         linha += '     - ' + at[j].nome;
         if (at[j].cpf) linha += ' (CPF: ' + at[j].cpf + ')';
         if (at[j].cnpj) linha += ' (CNPJ: ' + at[j].cnpj + ')';
-        // Verifica múltiplos campos possíveis de telefone
         var telefone = at[j].telefone || at[j].telefones || (at[j].contatos && at[j].contatos.telefone) || (at[j].contatos && at[j].contatos.telefones);
         if (telefone) {
-          if (Array.isArray(telefone)) {
-            if (telefone.length > 0) linha += ' (TEL: ' + telefone.join(', ') + ')';
-          } else {
-            linha += ' (TEL: ' + telefone + ')';
-          }
+          linha += Array.isArray(telefone) ? ` (TEL: ${telefone.join(', ')})` : ` (TEL: ${telefone})`;
         }
         linha += '\n';
       }
@@ -194,14 +202,9 @@ function fmtTxt(p, idx) {
         linha += '     - ' + ps[x].nome;
         if (ps[x].cpf) linha += ' (CPF: ' + ps[x].cpf + ')';
         if (ps[x].cnpj) linha += ' (CNPJ: ' + ps[x].cnpj + ')';
-        // Verifica múltiplos campos possíveis de telefone
         var telefone = ps[x].telefone || ps[x].telefones || (ps[x].contatos && ps[x].contatos.telefone) || (ps[x].contatos && ps[x].contatos.telefones);
         if (telefone) {
-          if (Array.isArray(telefone)) {
-            if (telefone.length > 0) linha += ' (TEL: ' + telefone.join(', ') + ')';
-          } else {
-            linha += ' (TEL: ' + telefone + ')';
-          }
+          linha += Array.isArray(telefone) ? ` (TEL: ${telefone.join(', ')})` : ` (TEL: ${telefone})`;
         }
         linha += '\n';
       }
@@ -211,7 +214,6 @@ function fmtTxt(p, idx) {
   return linha;
 }
 
-// Gera conteúdo completo do TXT com todos os processos
 function gerarTxt(processos, oabLabel, advogado) {
   var txt = '=================================================\n';
   txt += 'RELATORIO DE PROCESSOS - OAB ' + oabLabel + '\n';
@@ -228,7 +230,6 @@ function gerarTxt(processos, oabLabel, advogado) {
   return txt;
 }
 
-// Formata processo para mensagem no Telegram (fluxo normal nome/cpf)
 function fmt(p) {
   var f = (p.fontes && p.fontes[0]) ? p.fontes[0] : null;
   var lk = SUPREMO + encodeURIComponent(p.numero_cnj);
@@ -241,7 +242,6 @@ function fmt(p) {
   m += 'DATA INICIO: ' + (p.data_inicio || 'N/A') + '\n';
   m += 'DATA ULTIMO MOVIMENTO: ' + (p.data_ultima_movimentacao || 'N/A') + '\n';
   m += 'ORGAO JULGADOR: ' + (f && f.capa ? f.capa.orgao_julgador : '') + '\n';
-  m += 'ULTIMA MOVIMENTACAO:\n  DATA: ' + (p.data_ultima_movimentacao || 'N/A') + '\n';
   if (f && f.envolvidos) {
     var at = [], ps = [];
     for (var i = 0; i < f.envolvidos.length; i++) {
@@ -254,16 +254,15 @@ function fmt(p) {
         m += '- NOME: ' + at[j].nome + '\n';
         if (at[j].cpf) m += '  DOC: ' + at[j].cpf + '\n';
         if (at[j].cnpj) m += '  DOC: ' + at[j].cnpj + '\n';
-        // Verifica múltiplos campos possíveis de telefone
         var telefone = at[j].telefone || at[j].telefones || (at[j].contatos && at[j].contatos.telefone) || (at[j].contatos && at[j].contatos.telefones);
         if (telefone) {
-          if (Array.isArray(telefone)) {
-            if (telefone.length > 0) m += '  TEL: ' + telefone.join(', ') + '\n';
-          } else {
-            m += '  TEL: ' + telefone + '\n';
-          }
+          m += Array.isArray(telefone) ? `  TEL: ${telefone.join(', ')}\n` : `  TEL: ${telefone}\n`;
         }
-        if (at[j].advogados) { for (var k = 0; k < at[j].advogados.length; k++) { m += '  ADVOGADO: ' + at[j].advogados[k].nome + (at[j].advogados[k].cpf ? ' (CPF: ' + at[j].advogados[k].cpf + ')' : '') + '\n'; } }
+        if (at[j].advogados) { 
+          for (var k = 0; k < at[j].advogados.length; k++) { 
+            m += '  ADVOGADO: ' + at[j].advogados[k].nome + (at[j].advogados[k].cpf ? ` (CPF: ${at[j].advogados[k].cpf})` : '') + '\n'; 
+          } 
+        }
       }
     }
     if (ps.length) {
@@ -272,14 +271,9 @@ function fmt(p) {
         m += '- NOME: ' + ps[x].nome + '\n';
         if (ps[x].cpf) m += '  DOC: ' + ps[x].cpf + '\n';
         if (ps[x].cnpj) m += '  DOC: ' + ps[x].cnpj + '\n';
-        // Verifica múltiplos campos possíveis de telefone
         var telefone = ps[x].telefone || ps[x].telefones || (ps[x].contatos && ps[x].contatos.telefone) || (ps[x].contatos && ps[x].contatos.telefones);
         if (telefone) {
-          if (Array.isArray(telefone)) {
-            if (telefone.length > 0) m += '  TEL: ' + telefone.join(', ') + '\n';
-          } else {
-            m += '  TEL: ' + telefone + '\n';
-          }
+          m += Array.isArray(telefone) ? `  TEL: ${telefone.join(', ')}\n` : `  TEL: ${telefone}\n`;
         }
       }
     }
@@ -287,180 +281,146 @@ function fmt(p) {
   return m;
 }
 
-
-exports.handler = async function(event, context) {
+exports.handler = async function(event, context, callback) {
 
   if (event.httpMethod === 'GET') {
-    return {
-      statusCode: 200,
-      body: 'Bot ativo!'
-    };
+    return { statusCode: 200, body: 'Bot ativo! Versão otimizada ✅' };
   }
 
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: 'No'
-    };
+    return { statusCode: 405, body: 'Método não permitido' };
   }
 
   var body;
-
   try {
     body = JSON.parse(event.body || '{}');
   } catch(e) {
-    return {
-      statusCode: 200,
-      body: 'OK'
-    };
+    return { statusCode: 200, body: 'OK' };
   }
 
   if (!body.message || !body.message.text) {
-    return {
-      statusCode: 200,
-      body: 'OK'
-    };
+    return { statusCode: 200, body: 'OK' };
   }
 
   var chatId = body.message.chat.id;
   var txt = body.message.text.trim();
 
   if (txt === '/start' || txt === '/help') {
-
-    await sendTg(
-      chatId,
-      'Envie um NOME, CPF/CNPJ ou use /oab UF+NUMERO (ex: /oab MS3616) para buscar processos.'
-    );
-
-    return {
-      statusCode: 200,
-      body: 'OK'
-    };
+    await sendTg(chatId, 'Envie um NOME, CPF/CNPJ ou use /oab UF+NUMERO (ex: /oab MS3616) para buscar processos.\n✅ Sem duplicatas, sem loops e com paginação completa!');
+    return finalizarRequisicao(callback);
   }
 
-  // Tratamento do comando /oab - formato: /oab UF+NUMERO (ex: /oab MS3616)
+  // ========== COMANDO /OAB CORRIGIDO ==========
   if (txt.toLowerCase().indexOf('/oab') === 0) {
     var oabRaw = txt.substring(4).trim();
     var match = oabRaw.match(/^([A-Za-z]{2})\s*(\d+)$/);
     if (!oabRaw || !match) {
-      sendTg(chatId, 'Formato correto: /oab UF NUMERO (ex: /oab MS 3616 ou /oab MS3616)').then(function() { callback(null, { statusCode: 200, body: 'OK' }); });
+      sendTg(chatId, 'Formato correto: /oab UF NUMERO (ex: /oab MS 3616 ou /oab MS3616)')
+        .then(() => finalizarRequisicao(callback));
       return;
     }
     var oabEstado = match[1].toUpperCase();
     var oabNumero = match[2];
     var oabLabel = oabEstado + '/' + oabNumero;
-    sendTg(chatId, '⏳ Buscando processos...').then(function() {
-      return buscarOabTodos(oabEstado, oabNumero);
-    }).then(function(resultado) {
-      if (!resultado || resultado.items.length === 0) {
-        return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabLabel);
-      }
-      var total = resultado.items.length;
-      var advNome = resultado.advogado ? resultado.advogado.nome : '';
-      return sendTg(chatId, '✅ Encontrados ' + total + ' processos').then(function() {
-        // Envia cada processo individualmente primeiro
-        var promises = [];
-        for (var i = 0; i < resultado.items.length; i++) {
-          promises.push(sendTg(chatId, fmt(resultado.items[i])));
+
+    sendTg(chatId, '⏳ Buscando TODOS os processos (paginação automática)...')
+      .then(() => buscarOabTodos(oabEstado, oabNumero))
+      .then(async (resultado) => {
+        if (!resultado || resultado.items.length === 0) {
+          return sendTg(chatId, 'Nenhum processo encontrado para OAB: ' + oabLabel);
         }
-        return Promise.all(promises);
-      }).then(function() {
-        // Depois de enviar todas as mensagens, gera o TXT
-        return sendTg(chatId, '📄 Gerando arquivo detalhes.txt...');
-      }).then(function() {
+        var total = resultado.items.length;
+        var advNome = resultado.advogado ? resultado.advogado.nome : '';
+        
+        await sendTg(chatId, `✅ Encontrados ${total} processos (sem duplicatas)`);
+        
+        // Envia processos um por um
+        for (let proc of resultado.items) {
+          await sendTg(chatId, fmt(proc));
+        }
+
+        // Gera e envia arquivo
+        await sendTg(chatId, '📄 Gerando relatório completo...');
         var conteudoTxt = gerarTxt(resultado.items, oabLabel, resultado.advogado);
-        var nomeArquivo = 'temp_' + oabEstado + oabNumero + '_detalhes.txt';
-        return sendDoc(chatId, nomeArquivo, conteudoTxt);
-      }).then(function() {
-        return sendTg(chatId, '📄 Arquivo detalhes.txt gerado');
-      }).then(function() {
-        var resumo = 'OAB: ' + oabLabel + '\n';
-        resumo += '📊 Processos: ' + total + '\n';
-        resumo += '📞 Telefones incluídos nos detalhes';
-        return sendTg(chatId, resumo);
-      }).then(function() {
-        return sendTg(chatId, '🔄 Preparando download dos documentos...');
-      }).then(function() {
-        return sendTg(chatId, '📦 DOWNLOAD DOS DOCUMENTOS\n(expira em 4 minutos)');
-      });
-    }).then(function() { callback(null,  { statusCode: 200, body: 'OK' });
-    }).catch(function(e) {
-      sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { callback(null,  { statusCode: 200, body: 'OK' }); }).catch(function() { callback(null, { statusCode: 200, body: 'OK' }); });
-    });
+        var nomeArquivo = `relatorio_OAB_${oabEstado}${oabNumero}.txt`;
+        await sendDoc(chatId, nomeArquivo, conteudoTxt);
+        
+        await sendTg(chatId, `📄 Relatório finalizado!\n📊 Total: ${total} processos`);
+      })
+      .catch((e) => sendTg(chatId, 'Erro: ' + (e.message || e)))
+      .finally(() => finalizarRequisicao(callback));
     return;
   }
-  // Busca por CPF, CNPJ ou nome
+
+  // ========== BUSCA POR CPF ==========
   var limpo = txt.replace(/\D/g, '');
   var isCpf = limpo.length === 11;
   var isCnpj = limpo.length === 14;
   var tipo = (isCpf || isCnpj) ? 'cpf_cnpj' : 'nome';
+  var processosUnicos = new Set();
 
-  // FLUXO CPF: usa Vigilant (busca em todos os tribunais com 1 requisição)
   if (isCpf) {
-    sendTg(chatId, 'Buscando CPF... (Vigilant)').then(function() {
-      return buscarVigilant(limpo);
-    }).then(function(vigResult) {
-      // Extrai processos de todos os tribunais do resultado Vigilant
-      var processosVig = [];
-      if (vigResult && vigResult.data && vigResult.data.courts) {
-        for (var i = 0; i < vigResult.data.courts.length; i++) {
-          var court = vigResult.data.courts[i];
-          if (court.processes && court.processes.length > 0) {
-            for (var j = 0; j < court.processes.length; j++) {
-              processosVig.push({ proc: court.processes[j], tribunal: court.court });
+    sendTg(chatId, '🔍 Buscando CPF...')
+      .then(() => buscarVigilant(limpo))
+      .then(async (vigResult) => {
+        var processosVig = [];
+        if (vigResult?.data?.courts) {
+          vigResult.data.courts.forEach(court => {
+            if (court.processes) {
+              court.processes.forEach(proc => {
+                if (!processosUnicos.has(proc.numero_processo_unico)) {
+                  processosUnicos.add(proc.numero_processo_unico);
+                  processosVig.push({ proc, tribunal: court.court });
+                }
+              });
             }
+          });
+        }
+
+        if (processosVig.length > 0) {
+          await sendTg(chatId, `✅ Vigilant: ${processosVig.length} processos encontrados`);
+          for (let item of processosVig) {
+            await sendTg(chatId, fmtVigilant(item.proc, item.tribunal));
+          }
+          return;
+        }
+
+        await sendTg(chatId, '🔍 Nenhum no Vigilant, buscando no Escavador...');
+        var escResult = await buscar('cpf_cnpj', limpo);
+        if (!escResult?.items?.length) return sendTg(chatId, 'Nenhum processo encontrado.');
+        
+        if (escResult.envolvido_encontrado) {
+          await sendTg(chatId, `👤 ${escResult.envolvido_encontrado.nome} - ${escResult.envolvido_encontrado.quantidade_processos} processos`);
+        }
+        for (let proc of escResult.items) {
+          if (!processosUnicos.has(proc.numero_cnj)) {
+            processosUnicos.add(proc.numero_cnj);
+            await sendTg(chatId, fmt(proc));
           }
         }
-      }
-      // Se Vigilant encontrou processos, envia e para
-      if (processosVig.length > 0) {
-        sendTg(chatId, 'Vigilant encontrou ' + processosVig.length + ' processos.\nFonte: Vigilant (economico)');
-        var promises = [];
-        for (var k = 0; k < processosVig.length; k++) {
-          var msg = '[' + (k + 1) + '/' + processosVig.length + ']\n' + fmtVigilant(processosVig[k].proc, processosVig[k].tribunal);
-          promises.push(sendTg(chatId, msg));
-        }
-        return Promise.all(promises);
-      }
-      // Vigilant nao achou nada, fallback pro Escavador
-      sendTg(chatId, 'Vigilant nao encontrou. Buscando no Escavador...');
-      return buscar('cpf_cnpj', limpo).then(function(dados) {
-        if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para CPF: ' + limpo); }
-        if (dados.envolvido_encontrado) { sendTg(chatId, 'Encontrado: ' + dados.envolvido_encontrado.nome + ' (' + dados.envolvido_encontrado.quantidade_processos + ' processos)'); }
-        var promises = [];
-        for (var i = 0; i < dados.items.length; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
-        return Promise.all(promises);
-      });
-    }).then(function() { return {
-  statusCode: 200,
-  body: 'OK'
-};
-    }).catch(function(e) {
-      sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { return {
-  statusCode: 200,
-  body: 'OK'
-}; }).catch(function() { return {
-  statusCode: 200,
-  body: 'OK'
-}; });
-    });
+      })
+      .catch((e) => sendTg(chatId, 'Erro: ' + (e.message || e)))
+      .finally(() => finalizarRequisicao(callback));
     return;
   }
 
-  // FLUXO NOME ou CNPJ: usa Escavador direto (Vigilant so busca CPF)
-  sendTg(chatId, 'Buscando...').then(function() {
-    return buscar(tipo, txt);
-  }).then(function(dados) {
-    if (!dados || !dados.items || dados.items.length === 0) { return sendTg(chatId, 'Nenhum processo encontrado para: ' + txt); }
-    if (dados.envolvido_encontrado) { sendTg(chatId, 'Encontrado: ' + dados.envolvido_encontrado.nome + ' (' + dados.envolvido_encontrado.quantidade_processos + ' processos)'); }
-    var promises = [];
-    for (var i = 0; i < dados.items.length; i++) { promises.push(sendTg(chatId, fmt(dados.items[i]))); }
-    return Promise.all(promises);
-  }).then(function() { return {
-  statusCode: 200,
-  body: 'OK'
-};
-  }).catch(function(e) {
-    sendTg(chatId, 'Erro: ' + (e.message || e)).then(function() { callback(null, { statusCode: 200, body: 'OK' }); }).catch(function() { callback(null, { statusCode: 200, body: 'OK' }); });
-  });
+  // ========== BUSCA POR NOME / CNPJ ==========
+  sendTg(chatId, '🔍 Buscando...')
+    .then(() => buscar(tipo, txt))
+    .then(async (dados) => {
+      if (!dados?.items?.length) return sendTg(chatId, 'Nenhum processo encontrado para: ' + txt);
+      
+      if (dados.envolvido_encontrado) {
+        await sendTg(chatId, `👤 ${dados.envolvido_encontrado.nome} - ${dados.envolvido_encontrado.quantidade_processos} processos`);
+      }
+      
+      for (let proc of dados.items) {
+        if (!processosUnicos.has(proc.numero_cnj)) {
+          processosUnicos.add(proc.numero_cnj);
+          await sendTg(chatId, fmt(proc));
+        }
+      }
+    })
+    .catch((e) => sendTg(chatId, 'Erro: ' + (e.message || e)))
+    .finally(() => finalizarRequisicao(callback));
 };
