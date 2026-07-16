@@ -311,7 +311,7 @@ exports.handler = async (event) => {
     const matchOab = dadosOab.match(/^([A-Za-z]{2})\s*(\d+)$/);
     
     if (!matchOab) {
-      await enviarMensagemTelegram(chatId, '❌ Formato inválido! Use: `/oab UF NÚMERO` (ex: `/oab SP 12345`)'),;
+      await enviarMensagemTelegram(chatId, '❌ Formato inválido! Use: `/oab UF NÚMERO` (ex: `/oab SP 12345`)');
       return { statusCode: 200, body: 'OK' };
     }
 
