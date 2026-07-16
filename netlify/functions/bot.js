@@ -6,7 +6,7 @@ const https = require('https');
 // ==============================
 // CONFIGURAÇÕES
 // ==============================
-const API_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNzUyNmFjYmExNTY5NjM0ZTQwYTYzM2NmOTIxMWQ0NWU3Y2IwYmI1NWI3OWQ3ZGIwYTUwOTM0YTQ0MzgwYTY4Nzc0NzM0OTUzYjFlOTdhZGUiLCJpYXQiOjE3ODQyMzIyNjEuNjczOTUzLCJuYmYiOjE3ODQyMzIyNjEuNjczOTU0LCJleHAiOjE4MTU3OTMxOTkuNjcyNDY1LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.gAE09ftu6pObBQIhIXPvEuEOUSHr4C8ilrIX67uGZe-QVdYOVoKa2zKZzVUyURmAKMwCn-LkwgpIHRekGQ41ctMb_L68lXXehBlCSgWpo8npxRH5lpaaIpPUdYLGCFPTUIrJGARMSOMuLQ52tf6IlBTTQnDKysTVDPZ66pl87xpkfynYo9KyZXAEbYwZGXkfYwaSVpFor_WH5xo55idYk1PKaXq76Mv3cQZ1YEM9u__a21QTdAnEVwfhB3Dhr0a0PJQkLLoD1EJuIXhCM9hiC9KuYdKhtRq7CT8i5RvUFqvUs8l3PblLdhH-Y6_lhdwvEIeI5h_oUnbjgKDFLx84pOO83Fnlmcw_jpy1--SWbTT6gLhFsXDhmQ545p-NO6E7cr9Qu2Nm5lf-Ve8pTA5nUxqjVIpv-PJpEOdZzYyRbNBTTZA2bVcSfbJXLCfJ2PPJV7oO3NlOEadzoMGj6JDrtm8S_bdqZsbUgXylAtbuzjFLvjFTOI2ivVr50lCGT1jUf4CVsZ18QuHtY-pdKpEESIj-CYn4ebzGdTXcuROwuJBsVQDbustZ7iu5ThZrS3bv_tKXfTsa3kgkoo7Q04vweo5RJ2ITgnW5YovT2Qe6uZ3111V_ptruax4ExsnlXE96gaPRKOpcLle8fA3LlcrQ2AhpOWFIFQcYUQfEuRhrjvA';
+const API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNzUyNmFjYmExNTY5NjM0ZTQwYTYzM2NmOTIxMWQ0NWU3Y2IwYmI1NWI3OWQ3ZGIwYTUwOTM0YTQ0MzgwYTY4Nzc0NzM0OTUzYjFlOTdhZGUiLCJpYXQiOjE3ODQyMzIyNjEuNjczOTUzLCJuYmYiOjE3ODQyMzIyNjEuNjczOTU0LCJleHAiOjE4MTU3OTMxOTkuNjcyNDY1LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.gAE09ftu6pObBQIhIXPvEuEOUSHr4C8ilrIX67uGZe-QVdYOVoKa2zKZzVUyURmAKMwCn-LkwgpIHRekGQ41ctMb_L68lXXehBlCSgWpo8npxRH5lpaaIpPUdYLGCFPTUIrJGARMSOMuLQ52tf6IlBTTQnDKysTVDPZ66pl87xpkfynYo9KyZXAEbYwZGXkfYwaSVpFor_WH5xo55idYk1PKaXq76Mv3cQZ1YEM9u__a21QTdAnEVwfhB3Dhr0a0PJQkLLoD1EJuIXhCM9hiC9KuYdKhtRq7CT8i5RvUFqvUs8l3PblLdhH-Y6_lhdwvEIeI5h_oUnbjgKDFLx84pOO83Fnlmcw_jpy1--SWbTT6gLhFsXDhmQ545p-NO6E7cr9Qu2Nm5lf-Ve8pTA5nUxqjVIpv-PJpEOdZzYyRbNBTTZA2bVcSfbJXLCfJ2PPJV7oO3NlOEadzoMGj6JDrtm8S_bdqZsbUgXylAtbuzjFLvjFTOI2ivVr50lCGT1jUf4CVsZ18QuHtY-pdKpEESIj-CYn4ebzGdTXcuROwuJBsVQDbustZ7iu5ThZrS3bv_tKXfTsa3kgkoo7Q04vweo5RJ2ITgnW5YovT2Qe6uZ3111V_ptruax4ExsnlXE96gaPRKOpcLle8fA3LlcrQ2AhpOWFIFQcYUQfEuRhrjvA";
 const VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
 const TG_TOKENS = [
   '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo',
@@ -233,22 +233,47 @@ function formatarProcessoEscavador(processo, indice) {
   return linha + '\n';
 }
 
-function gerarRelatorioTxt(processos, oabLabel, advogado) {
-  let relatorio = '=================================================\n';
-  relatorio += `RELATÓRIO DE PROCESSOS - OAB ${oabLabel}\n`;
-  if (advogado) relatorio += `ADVOGADO: ${advogado.nome}\n`;
-  relatorio += `TOTAL: ${processos.length} processos encontrados\n`;
-  relatorio += `GERADO EM: ${new Date().toLocaleString('pt-BR')}\n`;
-  relatorio += '=================================================\n\n';
+function gerarRelatorio(processos, oabLabel, advogado) {
+  let html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatório - OAB ${oabLabel}</title>
+  <style>
+    body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:auto}
+    .topo{background:#f0f4f8;padding:15px;border-radius:6px;margin-bottom:20px}
+    .proc{border-bottom:1px solid #e0e0e0;padding:12px 0}
+    a{color:#0066cc;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .tel{color:#28a745;font-weight:bold}
+  </style>
+</head>
+<body>
+  <div class="topo">
+    <h2>RELATÓRIO COMPLETO DE PROCESSOS</h2>
+    <p><strong>OAB:</strong> ${oabLabel}</p>
+    <p><strong>Advogado:</strong> ${advogado?.nome || "Não informado"}</p>
+    <p><strong>Total encontrado:</strong> ${processos.length} processos</p>
+  </div>`;
 
-  processos.forEach((proc, idx) => {
-    relatorio += formatarProcessoEscavador(proc, idx + 1);
+  processos.forEach((p, i) => {
+    const linkProc = `https://supremodoseoriginal.com/?processo=${encodeURIComponent(p.numero_cnj || "")}`;
+    html += `<div class="proc">
+      <h3>��� Processo ${i+1}</h3>
+      <p><strong>Número CNJ:</strong> ${p.numero_cnj || "Não informado"}</p>
+      <p><strong>Link do processo:</strong> <a href="${linkProc}" target="_blank">${linkProc}</a></p>
+      <p><strong>Tribunal:</strong> ${p.fontes?.[0]?.nome || "Não informado"}</p>
+      <p><strong>Classe/Assunto:</strong> ${p.fontes?.[0]?.capa?.classe || "—"} / ${p.assuntos?.map(a=>a.nome).join("; ") || "Não informado"}</p>
+      <p><strong>Valor / Data:</strong> ${p.valor || "Não informado"} | ${p.data_entrada || "Não informado"}</p>
+      <p><strong>Última movimentação:</strong> ${p.data_ultima_movimentacao || "Não informado"}</p>
+      <p><strong>Partes:</strong><br>
+      ${p.polos?.map(po => `${po.tipo}: ${po.nome} | Doc: ${po.documento || "—"} | Tel: ${po.telefone ? `<a class="tel" href="tel:${po.telefone.replace(/\D/g,"")}">${po.telefone}</a>` : "Não informado"}`).join("<br>") || "Não informado"}
+      </p>
+    </div>`;
   });
 
-  relatorio += '=================================================\n';
-  relatorio += 'FIM DO RELATÓRIO\n';
-  relatorio += '=================================================';
-  return relatorio;
+  html += `</body></html>`;
+  return { conteudo: html, nome: `relatorio_${oabLabel.replace("/","_")}.html` };
 }
 
 // ==============================
