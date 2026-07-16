@@ -114,7 +114,7 @@ async function buscarVigilant(cpf) {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest'
   };
-}
+/* } */
 
   let parametros_duplicada = new URLSearchParams({
     oab_estado: uf,
