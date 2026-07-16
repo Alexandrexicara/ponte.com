@@ -116,7 +116,7 @@ async function buscarVigilant(cpf) {
   };
 }
 
-  const parametros = new URLSearchParams({
+  let parametros_duplicada = new URLSearchParams({
     oab_estado: uf,
     oab_numero: numero,
     ordem: 'desc',
