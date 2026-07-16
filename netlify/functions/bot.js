@@ -6,7 +6,6 @@ const https = require('https');
 // ==============================
 // CONFIGURAÇÕES
 // ==============================
- API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNzUyNmFjYmExNTY5NjM0ZTQwYTYzM2NmOTIxMWQ0NWU3Y2IwYmI1NWI3OWQ3ZGIwYTUwOTM0YTQ0MzgwYTY4Nzc0NzM0OTUzYjFlOTdhZGUiLCJpYXQiOjE3ODQyMzIyNjEuNjczOTUzLCJuYmYiOjE3ODQyMzIyNjEuNjczOTU0LCJleHAiOjE4MTU3OTMxOTkuNjcyNDY1LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.gAE09ftu6pObBQIhIXPvEuEOUSHr4C8ilrIX67uGZe-QVdYOVoKa2zKZzVUyURmAKMwCn-LkwgpIHRekGQ41ctMb_L68lXXehBlCSgWpo8npxRH5lpaaIpPUdYLGCFPTUIrJGARMSOMuLQ52tf6IlBTTQnDKysTVDPZ66pl87xpkfynYo9KyZXAEbYwZGXkfYwaSVpFor_WH5xo55idYk1PKaXq76Mv3cQZ1YEM9u__a21QTdAnEVwfhB3Dhr0a0PJQkLLoD1EJuIXhCM9hiC9KuYdKhtRq7CT8i5RvUFqvUs8l3PblLdhH-Y6_lhdwvEIeI5h_oUnbjgKDFLx84pOO83Fnlmcw_jpy1--SWbTT6gLhFsXDhmQ545p-NO6E7cr9Qu2Nm5lf-Ve8pTA5nUxqjVIpv-PJpEOdZzYyRbNBTTZA2bVcSfbJXLCfJ2PPJV7oO3NlOEadzoMGj6JDrtm8S_bdqZsbUgXylAtbuzjFLvjFTOI2ivVr50lCGT1jUf4CVsZ18QuHtY-pdKpEESIj-CYn4ebzGdTXcuROwuJBsVQDbustZ7iu5ThZrS3bv_tKXfTsa3kgkoo7Q04vweo5RJ2ITgnW5YovT2Qe6uZ3111V_ptruax4ExsnlXE96gaPRKOpcLle8fA3LlcrQ2AhpOWFIFQcYUQfEuRhrjvA";
 const VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
 const TG_TOKENS = [
   '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo',
@@ -105,7 +104,6 @@ async function buscarVigilant(cpf) {
   return fazerRequisicao('vigilant.trackjud.com.br', '/api/v1/consultas', 'POST', cabecalhos, corpo);
 }
 
-async function buscarEscavador(tipo, valor) {
   const parametros = new URLSearchParams({
     [tipo]: valor,
     ordem: 'desc',
@@ -114,13 +112,10 @@ async function buscarEscavador(tipo, valor) {
   const caminho = `/api/v2/envolvido/processos?${parametros}`;
   const cabecalhos = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${API_TOKEN}`,
     'X-Requested-With': 'XMLHttpRequest'
   };
-  return fazerRequisicao('api.escavador.com', caminho, 'GET', cabecalhos);
 }
 
-async function buscarOabEscavador(uf, numero) {
   const parametros = new URLSearchParams({
     oab_estado: uf,
     oab_numero: numero,
@@ -130,10 +125,8 @@ async function buscarOabEscavador(uf, numero) {
   const caminho = `/api/v2/advogado/processos?${parametros}`;
   const cabecalhos = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${API_TOKEN}`,
     'X-Requested-With': 'XMLHttpRequest'
   };
-  return fazerRequisicao('api.escavador.com', caminho, 'GET', cabecalhos);
 }
 
 // ==============================
@@ -182,7 +175,6 @@ function extrairTelefone(contato) {
   return 'Não informado';
 }
 
-function formatarProcessoEscavador(processo, indice) {
   const fonte = processo.fontes?.[0] || null;
   const link = SUPREMO_BASE + encodeURIComponent(processo.numero_cnj);
   const tribunal = fonte ? `${fonte.nome}${fonte.grau_formatado ? ` - ${fonte.grau_formatado}` : ''}` : 'Não informado';
@@ -310,7 +302,6 @@ exports.handler = async (event) => {
 • Envie **Nome**, **CPF/CNPJ** diretamente para buscar processos
 • Use \`/oab UF NÚMERO\` (ex: \`/oab MS 3616\`) para buscar por OAB
 
-Os dados são consultados nas fontes Vigilant e Escavador, com link direto para o Supremo do Sete.`);
     return { statusCode: 200, body: 'OK' };
   }
 
@@ -329,7 +320,6 @@ Os dados são consultados nas fontes Vigilant e Escavador, com link direto para 
     const labelOab = `${uf}/${numero}`;
 
     await enviarMensagemTelegram(chatId, '⏳ Buscando processos da OAB...');
-    const resultado = await buscarOabEscavador(uf, numero);
 
     if (!resultado?.items?.length) {
       await enviarMensagemTelegram(chatId, `❌ Nenhum processo encontrado para OAB ${labelOab}`);
@@ -342,7 +332,6 @@ Os dados são consultados nas fontes Vigilant e Escavador, com link direto para 
 
     // Envia processos individualmente
     for (const proc of resultado.items) {
-      await enviarMensagemTelegram(chatId, formatarProcessoEscavador(proc, 0).replace(/^\d+\.\s/, ''));
     }
 
     // Gera e envia relatório TXT
@@ -379,26 +368,17 @@ Os dados são consultados nas fontes Vigilant e Escavador, com link direto para 
       return { statusCode: 200, body: 'OK' };
     }
 
-    await enviarMensagemTelegram(chatId, '⚠️ Nenhum resultado na Vigilant, buscando no Escavador...');
-    const resEscavador = await buscarEscavador('cpf_cnpj', limpo);
-    if (!resEscavador?.items?.length) {
       await enviarMensagemTelegram(chatId, '❌ Nenhum processo encontrado para esse CPF');
       return { statusCode: 200, body: 'OK' };
     }
 
-    if (resEscavador.envolvido_encontrado) {
-      await enviarMensagemTelegram(chatId, `✅ Encontrado: **${resEscavador.envolvido_encontrado.nome}** (${resEscavador.envolvido_encontrado.quantidade_processos} processos)`);
     }
-    for (const proc of resEscavador.items) {
-      await enviarMensagemTelegram(chatId, formatarProcessoEscavador(proc, 0).replace(/^\d+\.\s/, ''));
     }
     return { statusCode: 200, body: 'OK' };
   }
 
   // Busca por CNPJ ou Nome
   const tipoBusca = ehCnpj ? 'cpf_cnpj' : 'nome';
-  await enviarMensagemTelegram(chatId, `⏳ Buscando ${ehCnpj ? 'CNPJ' : 'nome'} no Escavador...`);
-  const resBusca = await buscarEscavador(tipoBusca, texto);
 
   if (!resBusca?.items?.length) {
     await enviarMensagemTelegram(chatId, `❌ Nenhum processo encontrado para ${ehCnpj ? 'esse CNPJ' : 'esse nome'}`);
@@ -409,7 +389,6 @@ Os dados são consultados nas fontes Vigilant e Escavador, com link direto para 
     await enviarMensagemTelegram(chatId, `✅ Encontrado: **${resBusca.envolvido_encontrado.nome}** (${resBusca.envolvido_encontrado.quantidade_processos} processos)`);
   }
   for (const proc of resBusca.items) {
-    await enviarMensagemTelegram(chatId, formatarProcessoEscavador(proc, 0).replace(/^\d+\.\s/, ''));
   }
 
   return { statusCode: 200, body: 'OK' };
