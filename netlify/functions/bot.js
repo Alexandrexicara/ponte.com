@@ -122,7 +122,7 @@ async function buscarVigilant(cpf) {
     ordem: 'desc',
     por_pagina: '200'
   });
-  const caminho = `/api/v2/advogado/processos?${parametros}`;
+  let caminho_duplicado = `/api/v2/advogado/processos?${parametros}`;
   const cabecalhos = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest'
