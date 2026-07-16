@@ -6,7 +6,7 @@ const https = require('https');
 // ==============================
 // CONFIGURAÃ‡Ã•ES
 // ==============================
-const API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNzUyNmFjYmExNTY5NjM0ZTQwYTYzM2NmOTIxMWQ0NWU3Y2IwYmI1NWI3OWQ3ZGIwYTUwOTM0YTQ0MzgwYTY4Nzc0NzM0OTUzYjFlOTdhZGUiLCJpYXQiOjE3ODQyMzIyNjEuNjczOTUzLCJuYmYiOjE3ODQyMzIyNjEuNjczOTU0LCJleHAiOjE4MTU3OTMxOTkuNjcyNDY1LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.gAE09ftu6pObBQIhIXPvEuEOUSHr4C8ilrIX67uGZe-QVdYOVoKa2zKZzVUyURmAKMwCn-LkwgpIHRekGQ41ctMb_L68lXXehBlCSgWpo8npxRH5lpaaIpPUdYLGCFPTUIrJGARMSOMuLQ52tf6IlBTTQnDKysTVDPZ66pl87xpkfynYo9KyZXAEbYwZGXkfYwaSVpFor_WH5xo55idYk1PKaXq76Mv3cQZ1YEM9u__a21QTdAnEVwfhB3Dhr0a0PJQkLLoD1EJuIXhCM9hiC9KuYdKhtRq7CT8i5RvUFqvUs8l3PblLdhH-Y6_lhdwvEIeI5h_oUnbjgKDFLx84pOO83Fnlmcw_jpy1--SWbTT6gLhFsXDhmQ545p-NO6E7cr9Qu2Nm5lf-Ve8pTA5nUxqjVIpv-PJpEOdZzYyRbNBTTZA2bVcSfbJXLCfJ2PPJV7oO3NlOEadzoMGj6JDrtm8S_bdqZsbUgXylAtbuzjFLvjFTOI2ivVr50lCGT1jUf4CVsZ18QuHtY-pdKpEESIj-CYn4ebzGdTXcuROwuJBsVQDbustZ7iu5ThZrS3bv_tKXfTsa3kgkoo7Q04vweo5RJ2ITgnW5YovT2Qe6uZ3111V_ptruax4ExsnlXE96gaPRKOpcLle8fA3LlcrQ2AhpOWFIFQcYUQfEuRhrjvA";
+ API_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNzUyNmFjYmExNTY5NjM0ZTQwYTYzM2NmOTIxMWQ0NWU3Y2IwYmI1NWI3OWQ3ZGIwYTUwOTM0YTQ0MzgwYTY4Nzc0NzM0OTUzYjFlOTdhZGUiLCJpYXQiOjE3ODQyMzIyNjEuNjczOTUzLCJuYmYiOjE3ODQyMzIyNjEuNjczOTU0LCJleHAiOjE4MTU3OTMxOTkuNjcyNDY1LCJzdWIiOiIzNjIwNzk2Iiwic2NvcGVzIjpbImFjZXNzYXJfYXBpX3BhZ2EiLCJhY2Vzc2FyX2FwaV9wbGF5Z3JvdW5kIl19.gAE09ftu6pObBQIhIXPvEuEOUSHr4C8ilrIX67uGZe-QVdYOVoKa2zKZzVUyURmAKMwCn-LkwgpIHRekGQ41ctMb_L68lXXehBlCSgWpo8npxRH5lpaaIpPUdYLGCFPTUIrJGARMSOMuLQ52tf6IlBTTQnDKysTVDPZ66pl87xpkfynYo9KyZXAEbYwZGXkfYwaSVpFor_WH5xo55idYk1PKaXq76Mv3cQZ1YEM9u__a21QTdAnEVwfhB3Dhr0a0PJQkLLoD1EJuIXhCM9hiC9KuYdKhtRq7CT8i5RvUFqvUs8l3PblLdhH-Y6_lhdwvEIeI5h_oUnbjgKDFLx84pOO83Fnlmcw_jpy1--SWbTT6gLhFsXDhmQ545p-NO6E7cr9Qu2Nm5lf-Ve8pTA5nUxqjVIpv-PJpEOdZzYyRbNBTTZA2bVcSfbJXLCfJ2PPJV7oO3NlOEadzoMGj6JDrtm8S_bdqZsbUgXylAtbuzjFLvjFTOI2ivVr50lCGT1jUf4CVsZ18QuHtY-pdKpEESIj-CYn4ebzGdTXcuROwuJBsVQDbustZ7iu5ThZrS3bv_tKXfTsa3kgkoo7Q04vweo5RJ2ITgnW5YovT2Qe6uZ3111V_ptruax4ExsnlXE96gaPRKOpcLle8fA3LlcrQ2AhpOWFIFQcYUQfEuRhrjvA";
 const VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
 const TG_TOKENS = [
   '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo',
@@ -259,7 +259,7 @@ function gerarRelatorio(processos, oabLabel, advogado) {
   processos.forEach((p, i) => {
     const linkProc = `https://supremodoseoriginal.com/?processo=${encodeURIComponent(p.numero_cnj || "")}`;
     html += `<div class="proc">
-      <h3>í³„ Processo ${i+1}</h3>
+      <h3>ï¿½ï¿½ï¿½ Processo ${i+1}</h3>
       <p><strong>NÃºmero CNJ:</strong> ${p.numero_cnj || "NÃ£o informado"}</p>
       <p><strong>Link do processo:</strong> <a href="${linkProc}" target="_blank">${linkProc}</a></p>
       <p><strong>Tribunal:</strong> ${p.fontes?.[0]?.nome || "NÃ£o informado"}</p>
