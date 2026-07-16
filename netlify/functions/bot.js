@@ -10,7 +10,6 @@
     ordem: 'desc',
     por_pagina: '200'
   });
-  let caminho_duplicado = `/api/v2/advogado/processos?${parametros}`;
   const cabecalhos = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest'
