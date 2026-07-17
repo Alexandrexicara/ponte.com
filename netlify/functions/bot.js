@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+ï»¿const fetch = require('node-fetch');
 const API_URL = "/.netlify/functions/consultar";
 const SUPREMO_BASE = 'https://supremodoseoriginal.com/?processo=';
 const VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
@@ -34,7 +34,7 @@ function fazerRequisicao(host, caminho, metodo, cabecalhos = {}, corpo = null) {
 }
 
 async function enviarMensagemTelegram(chatId, texto) {
-  const TELEGRAM_TOKEN = '123456789:ABCdefGhIJKlmNoPQRstUvWxYz1234567'; // â† SEU TOKEN PERMANECE AQUI
+  const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo'; // â† SEU TOKEN PERMANECE AQUI
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
   await fetch(url, {
     method: 'POST',
@@ -60,30 +60,30 @@ async function buscarVigilant(cpf) {
 
 function formatarProcessoVigilant(processo, tribunal) {
   const link = SUPREMO_BASE + encodeURIComponent(processo.numero_processo_unico);
-  let mensagem = `í³‹ **PROCESSO:** ${processo.numero_processo_unico}\n`;
-  mensagem += `í´— **LINK:** ${link}\n`;
+  let mensagem = `ï¿½ï¿½ï¿½ **PROCESSO:** ${processo.numero_processo_unico}\n`;
+  mensagem += `ï¿½ï¿½ï¿½ **LINK:** ${link}\n`;
   mensagem += `âš–ï¸ **TRIBUNAL:** ${tribunal}\n`;
-  mensagem += `í³‚ **CLASSE:** ${processo.classe || 'NÃ£o informado'}\n`;
-  mensagem += `í³Œ **SITUAÃ‡ÃƒO:** ${processo.situacao || 'NÃ£o informado'}\n`;
+  mensagem += `ï¿½ï¿½ï¿½ **CLASSE:** ${processo.classe || 'NÃ£o informado'}\n`;
+  mensagem += `ï¿½ï¿½ï¿½ **SITUAÃ‡ÃƒO:** ${processo.situacao || 'NÃ£o informado'}\n`;
   
   if (processo.assuntos?.length) {
-    mensagem += `í³ **ASSUNTO:** ${processo.assuntos.map(a => a.ds_assunto).join(', ')}\n`;
+    mensagem += `ï¿½ï¿½ï¿½ **ASSUNTO:** ${processo.assuntos.map(a => a.ds_assunto).join(', ')}\n`;
   }
   
-  mensagem += `í²° **VALOR:** ${processo.valor_causa || 'NÃ£o informado'}\n`;
-  mensagem += `í³… **DATA INÃCIO:** ${processo.distribuido_em || 'NÃ£o informado'}\n`;
+  mensagem += `ï¿½ï¿½ï¿½ **VALOR:** ${processo.valor_causa || 'NÃ£o informado'}\n`;
+  mensagem += `ï¿½ï¿½ï¿½ **DATA INÃCIO:** ${processo.distribuido_em || 'NÃ£o informado'}\n`;
 
   if (processo.partes?.length) {
     const ativo = [], passivo = [];
     processo.partes.forEach(p => {
       p.tipo === 'Autor' ? ativo.push(p.nome) : passivo.push(p.nome);
     });
-    if (ativo.length) mensagem += `\ní±¤ **POLO ATIVO:**\n- ${ativo.join('\n- ')}\n`;
-    if (passivo.length) mensagem += `\ní±¤ **POLO PASSIVO:**\n- ${passivo.join('\n- ')}\n`;
+    if (ativo.length) mensagem += `\nï¿½ï¿½ï¿½ **POLO ATIVO:**\n- ${ativo.join('\n- ')}\n`;
+    if (passivo.length) mensagem += `\nï¿½ï¿½ï¿½ **POLO PASSIVO:**\n- ${passivo.join('\n- ')}\n`;
   }
 
   if (processo.movimentos?.length) {
-    mensagem += `\ní´„ **ÃšLTIMAS MOVIMENTAÃ‡Ã•ES:**\n`;
+    mensagem += `\nï¿½ï¿½ï¿½ **ÃšLTIMAS MOVIMENTAÃ‡Ã•ES:**\n`;
     processo.movimentos.slice(0, 3).forEach(m => {
       mensagem += `  â€¢ ${m.data_movimento} - ${m.descricao}\n`;
     });
@@ -109,14 +109,14 @@ function formatarProcessoCNJ(processo, indice) {
   const valor = capa.valor_causa?.valor_formatado || 'NÃ£o informado';
 
   let linha = `${indice}. **PROCESSO:** ${processo.numero_cnj}\n`;
-  linha += `   í´— **LINK:** ${link}\n`;
+  linha += `   ï¿½ï¿½ï¿½ **LINK:** ${link}\n`;
   linha += `   âš–ï¸ **TRIBUNAL:** ${tribunal}\n`;
-  linha += `   í³‚ **CLASSE:** ${capa.classe || 'NÃ£o informado'}\n`;
-  linha += `   í³Œ **ASSUNTO:** ${capa.assunto || 'NÃ£o informado'}\n`;
-  linha += `   í²° **VALOR:** ${valor}\n`;
-  linha += `   í³… **DATA INÃCIO:** ${processo.data_inicio || 'NÃ£o informado'}\n`;
-  linha += `   í³… **ÃšLTIMA MOVIMENTAÃ‡ÃƒO:** ${processo.data_ultima_movimentacao || 'NÃ£o informado'}\n`;
-  linha += `   í·‘â€âš–ï¸ **Ã“RGÃƒO JULGADOR:** ${capa.orgao_julgador || 'NÃ£o informado'}\n`;
+  linha += `   ï¿½ï¿½ï¿½ **CLASSE:** ${capa.classe || 'NÃ£o informado'}\n`;
+  linha += `   ï¿½ï¿½ï¿½ **ASSUNTO:** ${capa.assunto || 'NÃ£o informado'}\n`;
+  linha += `   ï¿½ï¿½ï¿½ **VALOR:** ${valor}\n`;
+  linha += `   ï¿½ï¿½ï¿½ **DATA INÃCIO:** ${processo.data_inicio || 'NÃ£o informado'}\n`;
+  linha += `   ï¿½ï¿½ï¿½ **ÃšLTIMA MOVIMENTAÃ‡ÃƒO:** ${processo.data_ultima_movimentacao || 'NÃ£o informado'}\n`;
+  linha += `   ï¿½ï¿½ï¿½â€âš–ï¸ **Ã“RGÃƒO JULGADOR:** ${capa.orgao_julgador || 'NÃ£o informado'}\n`;
 
   if (fonte?.envolvidos?.length) {
     const ativo = [], passivo = [];
@@ -125,7 +125,7 @@ function formatarProcessoCNJ(processo, indice) {
     });
 
     if (ativo.length) {
-      linha += `\n   í±¤ **POLO ATIVO:**\n`;
+      linha += `\n   ï¿½ï¿½ï¿½ **POLO ATIVO:**\n`;
       ativo.forEach(p => {
         linha += `     - ${p.nome}`;
         if (p.cpf) linha += ` | CPF: ${p.cpf}`;
@@ -140,7 +140,7 @@ function formatarProcessoCNJ(processo, indice) {
     }
 
     if (passivo.length) {
-      linha += `\n   í±¤ **POLO PASSIVO:**\n`;
+      linha += `\n   ï¿½ï¿½ï¿½ **POLO PASSIVO:**\n`;
       passivo.forEach(p => {
         linha += `     - ${p.nome}`;
         if (p.cpf) linha += ` | CPF: ${p.cpf}`;
@@ -191,7 +191,7 @@ function gerarRelatorio(processos, oabLabel, advogado) {
   processos.forEach((p, i) => {
     const linkProc = `https://supremodoseoriginal.com/?processo=${encodeURIComponent(p.numero_cnj || "")}`;
     html += `<div class="proc">
-      <h3>í³‹ Processo ${i+1}</h3>
+      <h3>ï¿½ï¿½ï¿½ Processo ${i+1}</h3>
       <p><strong>NÃºmero CNJ:</strong> ${p.numero_cnj || "NÃ£o informado"}</p>
       <p><strong>Link do processo:</strong> <a href="${linkProc}" target="_blank">${linkProc}</a></p>
       <p><strong>Tribunal:</strong> ${p.fontes?.[0]?.nome || "NÃ£o informado"}</p>
@@ -230,7 +230,7 @@ exports.handler = async (event) => {
 
   // Comandos bÃ¡sicos
   if (['/start', '/help'].includes(texto.toLowerCase())) {
-    await enviarMensagemTelegram(chatId, `í³‹ **COMANDOS DISPONÃVEIS:**
+    await enviarMensagemTelegram(chatId, `ï¿½ï¿½ï¿½ **COMANDOS DISPONÃVEIS:**
 â€¢ Envie **Nome**, **CPF/CNPJ** diretamente para buscar processos
 â€¢ Use \`/oab UF NÃšMERO\` (ex: \`/oab MS 3616\`) para buscar por OAB`);
     return { statusCode: 200, body: 'OK' };
@@ -268,7 +268,7 @@ exports.handler = async (event) => {
     }
 
     // Gera relatÃ³rio
-    await enviarMensagemTelegram(chatId, 'í³„ Gerando relatÃ³rio completo...');
+    await enviarMensagemTelegram(chatId, 'ï¿½ï¿½ï¿½ Gerando relatÃ³rio completo...');
     const relatorio = gerarRelatorioTxt(resultado.itens, labelOab, resultado.advogado);
     await enviarDocumentoTelegram(chatId, `relatorio_oab_${uf}${numero}.txt`, relatorio);
     await enviarMensagemTelegram(chatId, 'âœ… RelatÃ³rio enviado com sucesso!');
