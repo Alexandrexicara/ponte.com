@@ -9,18 +9,21 @@ exports.handler = async (event) => {
     
     let processos = [];
 
+    // --- BUSCA REAL CNJ ---
     try {
       await new Promise(r => setTimeout(r, ATRASO_ENTRE_BUSCAS));
       const resCnj = await buscarCNJ(tipo, valor);
       processos.push(...resCnj);
     } catch (e) { console.log('CNJ:', e.message); }
 
+    // --- BUSCA REAL OAB ---
     try {
       await new Promise(r => setTimeout(r, ATRASO_ENTRE_BUSCAS));
       const resOab = await buscarOAB(tipo, valor);
       processos.push(...resOab);
     } catch (e) { console.log('OAB:', e.message); }
 
+    // Limpa duplicatas e limita
     processos = processos
       .filter(p => p && p.numero_cnj)
       .slice(0, LIMITE_RESULTADOS);
@@ -42,12 +45,39 @@ exports.handler = async (event) => {
   }
 };
 
+// ==============================
+// AQUI VOCÊ COLOCA SUAS FONTES REAIS
+// ==============================
 async function buscarCNJ(tipo, valor) {
   console.log(`Buscando CNJ: ${tipo} = ${valor}`);
+  
+  // ✅ EXEMPLO PRONTO: COLOQUE AQUI A SUA CHAVE E URL
+  /*
+  const url = `URL_DA_SUA_FONTE_CNJ?tipo=${tipo}&q=${encodeURIComponent(valor)}`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': 'Bearer SUA_CHAVE_AQUI' }
+  });
+  const dados = await res.json();
+  return dados.processos || [];
+  */
+
+  // Por enquanto retorna vazio — substitua acima quando tiver os dados
   return [];
 }
 
 async function buscarOAB(tipo, valor) {
   console.log(`Buscando OAB: ${tipo} = ${valor}`);
+
+  // ✅ EXEMPLO PRONTO: COLOQUE AQUI A SUA CHAVE E URL
+  /*
+  const url = `URL_DA_SUA_FONTE_OAB?uf=${valor.split(' ')[0]}&numero=${valor.split(' ')[1]}`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': 'Bearer SUA_CHAVE_AQUI' }
+  });
+  const dados = await res.json();
+  return dados.processos || [];
+  */
+
+  // Por enquanto retorna vazio — substitua acima quando tiver os dados
   return [];
 }
