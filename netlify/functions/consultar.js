@@ -9,8 +9,6 @@ exports.handler = async (event) => {
     
     let processos = [];
 
-    // --- AQUI VAMOS COLOCAR AS BUSCAS REAIS AMANHÃ ---
-    // CNJ, OAB, Tribunais... já está estruturado e esperando
     try {
       await new Promise(r => setTimeout(r, ATRASO_ENTRE_BUSCAS));
       const resCnj = await buscarCNJ(tipo, valor);
@@ -23,7 +21,6 @@ exports.handler = async (event) => {
       processos.push(...resOab);
     } catch (e) { console.log('OAB:', e.message); }
 
-    // Limpa e organiza
     processos = processos
       .filter(p => p && p.numero_cnj)
       .slice(0, LIMITE_RESULTADOS);
@@ -45,7 +42,6 @@ exports.handler = async (event) => {
   }
 };
 
-// Funções prontas para receber o código real amanhã
 async function buscarCNJ(tipo, valor) {
   console.log(`Buscando CNJ: ${tipo} = ${valor}`);
   return [];
