@@ -1,51 +1,89 @@
+const fetch = require('node-fetch');
 const API_URL = "/.netlify/functions/consultar";
-  const cabecalhos = {
-    'Content-Type': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest'
-  };
-/* } */
+const SUPREMO_BASE = 'https://supremodoseoriginal.com/?processo=';
+const VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
 
-  let parametros_duplicada = new URLSearchParams({
-    oab_estado: uf,
-    oab_numero: numero,
-    ordem: 'desc',
-    por_pagina: '200'
+const cabecalhos = {
+  'Content-Type': 'application/json',
+  'X-Requested-With': 'XMLHttpRequest'
+};
+
+function fazerRequisicao(host, caminho, metodo, cabecalhos = {}, corpo = null) {
+  return new Promise((resolver, rejeitar) => {
+    const opcoes = {
+      hostname: host,
+      path: caminho,
+      method: metodo,
+      headers: cabecalhos
+    };
+    const requisicao = https.request(opcoes, (resposta) => {
+      let dados = '';
+      resposta.on('data', (pedaco) => dados += pedaco);
+      resposta.on('end', () => {
+        try {
+          resolver(JSON.parse(dados));
+        } catch {
+          resolver({});
+        }
+      });
+    });
+    requisicao.on('error', rejeitar);
+    if (corpo) requisicao.write(corpo);
+    requisicao.end();
   });
-  const cabecalhos = {
-    'Content-Type': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest'
-  };
 }
 
-// ==============================
-// FORMATA√á√ÉO DE DADOS
-// ==============================
+async function enviarMensagemTelegram(chatId, texto) {
+  const TELEGRAM_TOKEN = '123456789:ABCdefGhIJKlmNoPQRstUvWxYz1234567'; // ‚Üê SEU TOKEN PERMANECE AQUI
+  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' })
+  });
+}
+
+async function enviarDocumentoTelegram(chatId, nome, conteudo) {
+  const TELEGRAM_TOKEN = '123456789:ABCdefGhIJKlmNoPQRstUvWxYz1234567'; // ‚Üê SEU TOKEN PERMANECE AQUI
+  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`;
+  const form = new FormData();
+  form.append('chat_id', chatId);
+  form.append('document', Buffer.from(conteudo), { filename: nome });
+  await fetch(url, { method: 'POST', body: form });
+}
+
+async function buscarVigilant(cpf) {
+  return await fetch(`https://api.vigilant.com.br/v1/pessoas/${cpf}/processos`, {
+    headers: { 'Authorization': `Bearer ${VIGILANT_KEY}` }
+  }).then(r => r.json());
+}
+
 function formatarProcessoVigilant(processo, tribunal) {
   const link = SUPREMO_BASE + encodeURIComponent(processo.numero_processo_unico);
-  let mensagem = `üìã **PROCESSO:** ${processo.numero_processo_unico}\n`;
-  mensagem += `üîó **LINK:** ${link}\n`;
+  let mensagem = `Ì≥ã **PROCESSO:** ${processo.numero_processo_unico}\n`;
+  mensagem += `Ì¥ó **LINK:** ${link}\n`;
   mensagem += `‚öñÔ∏è **TRIBUNAL:** ${tribunal}\n`;
-  mensagem += `üìÇ **CLASSE:** ${processo.classe || 'N√£o informado'}\n`;
-  mensagem += `üìå **SITUA√á√ÉO:** ${processo.situacao || 'N√£o informado'}\n`;
+  mensagem += `Ì≥Ç **CLASSE:** ${processo.classe || 'N√£o informado'}\n`;
+  mensagem += `Ì≥å **SITUA√á√ÉO:** ${processo.situacao || 'N√£o informado'}\n`;
   
   if (processo.assuntos?.length) {
-    mensagem += `üìù **ASSUNTO:** ${processo.assuntos.map(a => a.ds_assunto).join(', ')}\n`;
+    mensagem += `Ì≥ù **ASSUNTO:** ${processo.assuntos.map(a => a.ds_assunto).join(', ')}\n`;
   }
   
-  mensagem += `üí∞ **VALOR:** ${processo.valor_causa || 'N√£o informado'}\n`;
-  mensagem += `üìÖ **DATA IN√çCIO:** ${processo.distribuido_em || 'N√£o informado'}\n`;
+  mensagem += `Ì≤∞ **VALOR:** ${processo.valor_causa || 'N√£o informado'}\n`;
+  mensagem += `Ì≥Ö **DATA IN√çCIO:** ${processo.distribuido_em || 'N√£o informado'}\n`;
 
   if (processo.partes?.length) {
     const ativo = [], passivo = [];
     processo.partes.forEach(p => {
       p.tipo === 'Autor' ? ativo.push(p.nome) : passivo.push(p.nome);
     });
-    if (ativo.length) mensagem += `\nüë§ **POLO ATIVO:**\n- ${ativo.join('\n- ')}\n`;
-    if (passivo.length) mensagem += `\nüë§ **POLO PASSIVO:**\n- ${passivo.join('\n- ')}\n`;
+    if (ativo.length) mensagem += `\nÌ±§ **POLO ATIVO:**\n- ${ativo.join('\n- ')}\n`;
+    if (passivo.length) mensagem += `\nÌ±§ **POLO PASSIVO:**\n- ${passivo.join('\n- ')}\n`;
   }
 
   if (processo.movimentos?.length) {
-    mensagem += `\nüîÑ **√öLTIMAS MOVIMENTA√á√ïES:**\n`;
+    mensagem += `\nÌ¥Ñ **√öLTIMAS MOVIMENTA√á√ïES:**\n`;
     processo.movimentos.slice(0, 3).forEach(m => {
       mensagem += `  ‚Ä¢ ${m.data_movimento} - ${m.descricao}\n`;
     });
@@ -63,6 +101,7 @@ function extrairTelefone(contato) {
   return 'N√£o informado';
 }
 
+function formatarProcessoCNJ(processo, indice) {
   const fonte = processo.fontes?.[0] || null;
   const link = SUPREMO_BASE + encodeURIComponent(processo.numero_cnj);
   const tribunal = fonte ? `${fonte.nome}${fonte.grau_formatado ? ` - ${fonte.grau_formatado}` : ''}` : 'N√£o informado';
@@ -70,14 +109,14 @@ function extrairTelefone(contato) {
   const valor = capa.valor_causa?.valor_formatado || 'N√£o informado';
 
   let linha = `${indice}. **PROCESSO:** ${processo.numero_cnj}\n`;
-  linha += `   üîó **LINK:** ${link}\n`;
+  linha += `   Ì¥ó **LINK:** ${link}\n`;
   linha += `   ‚öñÔ∏è **TRIBUNAL:** ${tribunal}\n`;
-  linha += `   üìÇ **CLASSE:** ${capa.classe || 'N√£o informado'}\n`;
-  linha += `   üìå **ASSUNTO:** ${capa.assunto || 'N√£o informado'}\n`;
-  linha += `   üí∞ **VALOR:** ${valor}\n`;
-  linha += `   üìÖ **DATA IN√çCIO:** ${processo.data_inicio || 'N√£o informado'}\n`;
-  linha += `   üìÖ **√öLTIMA MOVIMENTA√á√ÉO:** ${processo.data_ultima_movimentacao || 'N√£o informado'}\n`;
-  linha += `   üßë‚Äç‚öñÔ∏è **√ìRG√ÉO JULGADOR:** ${capa.orgao_julgador || 'N√£o informado'}\n`;
+  linha += `   Ì≥Ç **CLASSE:** ${capa.classe || 'N√£o informado'}\n`;
+  linha += `   Ì≥å **ASSUNTO:** ${capa.assunto || 'N√£o informado'}\n`;
+  linha += `   Ì≤∞ **VALOR:** ${valor}\n`;
+  linha += `   Ì≥Ö **DATA IN√çCIO:** ${processo.data_inicio || 'N√£o informado'}\n`;
+  linha += `   Ì≥Ö **√öLTIMA MOVIMENTA√á√ÉO:** ${processo.data_ultima_movimentacao || 'N√£o informado'}\n`;
+  linha += `   Ì∑ë‚Äç‚öñÔ∏è **√ìRG√ÉO JULGADOR:** ${capa.orgao_julgador || 'N√£o informado'}\n`;
 
   if (fonte?.envolvidos?.length) {
     const ativo = [], passivo = [];
@@ -86,7 +125,7 @@ function extrairTelefone(contato) {
     });
 
     if (ativo.length) {
-      linha += `\n   üë§ **POLO ATIVO:**\n`;
+      linha += `\n   Ì±§ **POLO ATIVO:**\n`;
       ativo.forEach(p => {
         linha += `     - ${p.nome}`;
         if (p.cpf) linha += ` | CPF: ${p.cpf}`;
@@ -101,7 +140,7 @@ function extrairTelefone(contato) {
     }
 
     if (passivo.length) {
-      linha += `\n   üë§ **POLO PASSIVO:**\n`;
+      linha += `\n   Ì±§ **POLO PASSIVO:**\n`;
       passivo.forEach(p => {
         linha += `     - ${p.nome}`;
         if (p.cpf) linha += ` | CPF: ${p.cpf}`;
@@ -111,6 +150,19 @@ function extrairTelefone(contato) {
     }
   }
   return linha + '\n';
+}
+
+function gerarRelatorioTxt(processos, oabLabel, advogado) {
+  let txt = `RELAT√ìRIO DE PROCESSOS - OAB ${oabLabel}\n`;
+  txt += `Advogado: ${advogado || "N√£o informado"}\n`;
+  txt += `Total de processos: ${processos.length}\n`;
+  txt += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n\n`;
+  
+  processos.forEach((p, i) => {
+    txt += `--- PROCESSO ${i+1} ---\n`;
+    txt += formatarProcessoCNJ(p, i+1);
+  });
+  return txt;
 }
 
 function gerarRelatorio(processos, oabLabel, advogado) {
@@ -139,7 +191,7 @@ function gerarRelatorio(processos, oabLabel, advogado) {
   processos.forEach((p, i) => {
     const linkProc = `https://supremodoseoriginal.com/?processo=${encodeURIComponent(p.numero_cnj || "")}`;
     html += `<div class="proc">
-      <h3>ÔøΩÔøΩÔøΩ Processo ${i+1}</h3>
+      <h3>Ì≥ã Processo ${i+1}</h3>
       <p><strong>N√∫mero CNJ:</strong> ${p.numero_cnj || "N√£o informado"}</p>
       <p><strong>Link do processo:</strong> <a href="${linkProc}" target="_blank">${linkProc}</a></p>
       <p><strong>Tribunal:</strong> ${p.fontes?.[0]?.nome || "N√£o informado"}</p>
@@ -156,15 +208,10 @@ function gerarRelatorio(processos, oabLabel, advogado) {
   return { conteudo: html, nome: `relatorio_${oabLabel.replace("/","_")}.html` };
 }
 
-// ==============================
-// FUN√á√ÉO PRINCIPAL (LAMBDA)
-// ==============================
 exports.handler = async (event) => {
-  // Resposta de verifica√ß√£o de atividade
   if (event.httpMethod === 'GET') {
     return { statusCode: 200, body: '‚úÖ Bot ativo e funcionando!' };
   }
-
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'M√©todo n√£o permitido' };
   }
@@ -177,98 +224,88 @@ exports.handler = async (event) => {
   }
 
   const mensagem = corpoRequisicao.message;
-  if (!mensagem?.text) {
-    return { statusCode: 200, body: 'Mensagem vazia' };
-  }
-
+  if (!mensagem?.text) return { statusCode: 200, body: 'Mensagem vazia' };
   const chatId = mensagem.chat.id;
   const texto = mensagem.text.trim();
 
   // Comandos b√°sicos
   if (['/start', '/help'].includes(texto.toLowerCase())) {
-    await enviarMensagemTelegram(chatId, `üìã **COMANDOS DISPON√çVEIS:**
+    await enviarMensagemTelegram(chatId, `Ì≥ã **COMANDOS DISPON√çVEIS:**
 ‚Ä¢ Envie **Nome**, **CPF/CNPJ** diretamente para buscar processos
-‚Ä¢ Use \`/oab UF N√öMERO\` (ex: \`/oab MS 3616\`) para buscar por OAB
-
+‚Ä¢ Use \`/oab UF N√öMERO\` (ex: \`/oab MS 3616\`) para buscar por OAB`);
     return { statusCode: 200, body: 'OK' };
   }
 
-  // Busca por OAB
+  // Busca por OAB ‚Äî CHAMA NOSSA API PR√ìPRIA
   if (texto.toLowerCase().startsWith('/oab')) {
     const dadosOab = texto.substring(4).trim();
     const matchOab = dadosOab.match(/^([A-Za-z]{2})\s*(\d+)$/);
-    
     if (!matchOab) {
       await enviarMensagemTelegram(chatId, '‚ùå Formato inv√°lido! Use: `/oab UF N√öMERO` (ex: `/oab SP 12345`)');
       return { statusCode: 200, body: 'OK' };
     }
-
     const uf = matchOab[1].toUpperCase();
     const numero = matchOab[2];
     const labelOab = `${uf}/${numero}`;
 
     await enviarMensagemTelegram(chatId, '‚è≥ Buscando processos da OAB...');
+    
+    // CHAMADA PARA A NOSSA API
+    const resApi = await fetch(`${API_URL}?tipo=oab&valor=${uf}%20${numero}`);
+    const resultado = await resApi.json();
 
-    if (!resultado?.items?.length) {
+    if (!resultado?.itens?.length) {
       await enviarMensagemTelegram(chatId, `‚ùå Nenhum processo encontrado para OAB ${labelOab}`);
       return { statusCode: 200, body: 'OK' };
     }
 
-    const total = resultado.items.length;
-    const advogado = resultado.advogado?.nome || 'N√£o identificado';
-    await enviarMensagemTelegram(chatId, `‚úÖ Encontrados **${total} processos** para OAB ${labelOab} (Advogado: ${advogado})`);
+    const total = resultado.itens.length;
+    await enviarMensagemTelegram(chatId, `‚úÖ Encontrados **${total} processos** para OAB ${labelOab}`);
 
-    // Envia processos individualmente
-    for (const proc of resultado.items) {
+    // Mostra processos
+    for (let i = 0; i < resultado.itens.length; i++) {
+      await enviarMensagemTelegram(chatId, formatarProcessoCNJ(resultado.itens[i], i+1));
     }
 
-    // Gera e envia relat√≥rio TXT
-    await enviarMensagemTelegram(chatId, 'üìÑ Gerando relat√≥rio completo...');
-    const relatorio = gerarRelatorioTxt(resultado.items, labelOab, resultado.advogado);
+    // Gera relat√≥rio
+    await enviarMensagemTelegram(chatId, 'Ì≥Ñ Gerando relat√≥rio completo...');
+    const relatorio = gerarRelatorioTxt(resultado.itens, labelOab, resultado.advogado);
     await enviarDocumentoTelegram(chatId, `relatorio_oab_${uf}${numero}.txt`, relatorio);
     await enviarMensagemTelegram(chatId, '‚úÖ Relat√≥rio enviado com sucesso!');
     return { statusCode: 200, body: 'OK' };
   }
 
-  // Busca por CPF/CNPJ/Nome
+  // Busca por CPF
   const limpo = texto.replace(/\D/g, '');
   const ehCpf = limpo.length === 11;
   const ehCnpj = limpo.length === 14;
 
   if (ehCpf) {
-    await enviarMensagemTelegram(chatId, '‚è≥ Buscando CPF na fonte Vigilant...');
+    await enviarMensagemTelegram(chatId, '‚è≥ Buscando CPF...');
     const resVigilant = await buscarVigilant(limpo);
     const processos = [];
-
     if (resVigilant?.data?.courts?.length) {
       resVigilant.data.courts.forEach(tribunal => {
-        tribunal.processes?.forEach(proc => {
-          processos.push({ proc, tribunal: tribunal.court });
-        });
+        tribunal.processes?.forEach(proc => processos.push({ proc, tribunal: tribunal.court }));
       });
     }
-
     if (processos.length) {
-      await enviarMensagemTelegram(chatId, `‚úÖ Encontrados **${processos.length} processos** na fonte Vigilant`);
+      await enviarMensagemTelegram(chatId, `‚úÖ Encontrados **${processos.length} processos**`);
       for (const item of processos) {
         await enviarMensagemTelegram(chatId, formatarProcessoVigilant(item.proc, item.tribunal));
       }
       return { statusCode: 200, body: 'OK' };
     }
-
-      await enviarMensagemTelegram(chatId, '‚ùå Nenhum processo encontrado para esse CPF');
-      return { statusCode: 200, body: 'OK' };
-    }
-
-    }
-    }
+    await enviarMensagemTelegram(chatId, '‚ùå Nenhum processo encontrado para esse CPF');
     return { statusCode: 200, body: 'OK' };
   }
 
   // Busca por CNPJ ou Nome
   const tipoBusca = ehCnpj ? 'cpf_cnpj' : 'nome';
+  await enviarMensagemTelegram(chatId, `‚è≥ Buscando por ${tipoBusca}...`);
+  const resBusca = await fetch(`${API_URL}?tipo=${tipoBusca}&valor=${encodeURIComponent(texto)}`).then(r => r.json());
 
-  if (!resBusca?.items?.length) {
+  if (!resBusca?.itens?.length) {
     await enviarMensagemTelegram(chatId, `‚ùå Nenhum processo encontrado para ${ehCnpj ? 'esse CNPJ' : 'esse nome'}`);
     return { statusCode: 200, body: 'OK' };
   }
@@ -276,8 +313,8 @@ exports.handler = async (event) => {
   if (resBusca.envolvido_encontrado) {
     await enviarMensagemTelegram(chatId, `‚úÖ Encontrado: **${resBusca.envolvido_encontrado.nome}** (${resBusca.envolvido_encontrado.quantidade_processos} processos)`);
   }
-  for (const proc of resBusca.items) {
+  for (let i = 0; i < resBusca.itens.length; i++) {
+    await enviarMensagemTelegram(chatId, formatarProcessoCNJ(resBusca.itens[i], i+1));
   }
-
   return { statusCode: 200, body: 'OK' };
 };
