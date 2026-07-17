@@ -1,7 +1,7 @@
 ﻿const fetch = require('node-fetch');
 const API_URL = "/.netlify/functions/consultar";
 const SUPREMO_BASE = 'https://supremodoseoriginal.com/?processo=';
-const VIGILANT_KEY = 'vgl_4McvIhmBPJekv_aOcfUsQSK4czrwuYGuRVVj4YoqXR0';
+const VIGILANT_KEY = 'vgl_cnOgXTIqxwfIPQdsIZD-N8wuBDlDvV1D23nhMVOfLSs';
 
 const cabecalhos = {
   'Content-Type': 'application/json',
@@ -34,6 +34,7 @@ function fazerRequisicao(host, caminho, metodo, cabecalhos = {}, corpo = null) {
 }
 
 async function enviarMensagemTelegram(chatId, texto) {
+const TIMEOUT_REQUISICAO = 25000; // 25 segundos — se passar, para
   const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo'; // ← SEU TOKEN PERMANECE AQUI
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
   await fetch(url, {
