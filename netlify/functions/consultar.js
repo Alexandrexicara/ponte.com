@@ -2,28 +2,40 @@ const fetch = require('node-fetch');
 const LIMITE_RESULTADOS = 200;
 const ATRASO_ENTRE_BUSCAS = 300;
 
+// ==============================
+// AQUI FICAM AS CONFIGURAÇÕES DAS FONTES
+// COLOQUE AQUI A URL E CHAVE DE CADA FONTE QUE VOCÊ USAR
+// ==============================
+const CONFIG = {
+  // Exemplo: se você tiver uma fonte que substitui o Escavador
+  // FONTE_PROCESSOS_URL: "https://api.sua-fonte.com.br/v1/buscar",
+  // FONTE_PROCESSOS_CHAVE: "SUA_CHAVE_AQUI",
+
+  // Exemplo: consulta OAB em conselho
+  // OAB_CONSULTA_URL: "https://api.oabuf.br/consulta",
+};
+
 exports.handler = async (event) => {
   try {
     const { tipo, valor } = event.queryStringParameters;
-    if (!tipo || !valor) throw new Error('Informe tipo (oab/nome/cpf) e valor');
+    if (!tipo || !valor) throw new Error('Informe tipo e valor');
     
     let processos = [];
 
-    // --- BUSCA REAL CNJ ---
+    // --- BUSCA PRINCIPAL (NO LUGAR DO ESCAVADOR) ---
     try {
       await new Promise(r => setTimeout(r, ATRASO_ENTRE_BUSCAS));
-      const resCnj = await buscarCNJ(tipo, valor);
-      processos.push(...resCnj);
-    } catch (e) { console.log('CNJ:', e.message); }
+      const resPrincipal = await buscarFontePrincipal(tipo, valor);
+      processos.push(...resPrincipal);
+    } catch (e) { console.log('Fonte Principal:', e.message); }
 
-    // --- BUSCA REAL OAB ---
+    // --- OUTRAS FONTES SE PRECISAR ---
     try {
       await new Promise(r => setTimeout(r, ATRASO_ENTRE_BUSCAS));
-      const resOab = await buscarOAB(tipo, valor);
+      const resOab = await buscarDadosOab(tipo, valor);
       processos.push(...resOab);
     } catch (e) { console.log('OAB:', e.message); }
 
-    // Limpa duplicatas e limita
     processos = processos
       .filter(p => p && p.numero_cnj)
       .slice(0, LIMITE_RESULTADOS);
@@ -38,46 +50,34 @@ exports.handler = async (event) => {
       })
     };
   } catch (erro) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ erro: erro.message })
-    };
+    return { statusCode: 400, body: JSON.stringify({ erro: erro.message }) };
   }
 };
 
 // ==============================
-// AQUI VOCÊ COLOCA SUAS FONTES REAIS
+// FUNÇÃO NO LUGAR DO ESCAVADOR
 // ==============================
-async function buscarCNJ(tipo, valor) {
-  console.log(`Buscando CNJ: ${tipo} = ${valor}`);
-  
-  // ✅ EXEMPLO PRONTO: COLOQUE AQUI A SUA CHAVE E URL
+async function buscarFontePrincipal(tipo, valor) {
+  console.log(`Buscando fonte principal: ${tipo} = ${valor}`);
+
+  // ✅ QUANDO VOCÊ TIVER A URL E CHAVE, É SÓ DESCOMENTAR E PREENCHER:
   /*
-  const url = `URL_DA_SUA_FONTE_CNJ?tipo=${tipo}&q=${encodeURIComponent(valor)}`;
-  const res = await fetch(url, {
-    headers: { 'Authorization': 'Bearer SUA_CHAVE_AQUI' }
+  const resposta = await fetch(`${CONFIG.FONTE_PROCESSOS_URL}?tipo=${tipo}&q=${encodeURIComponent(valor)}`, {
+    headers: {
+      'Authorization': `Bearer ${CONFIG.FONTE_PROCESSOS_CHAVE}`,
+      'Content-Type': 'application/json'
+    }
   });
-  const dados = await res.json();
-  return dados.processos || [];
+  const dados = await resposta.json();
+  
+  // Converte para o formato que o bot já entende (igual Escavador)
+  return dados.itens || dados.processos || [];
   */
 
-  // Por enquanto retorna vazio — substitua acima quando tiver os dados
   return [];
 }
 
-async function buscarOAB(tipo, valor) {
-  console.log(`Buscando OAB: ${tipo} = ${valor}`);
-
-  // ✅ EXEMPLO PRONTO: COLOQUE AQUI A SUA CHAVE E URL
-  /*
-  const url = `URL_DA_SUA_FONTE_OAB?uf=${valor.split(' ')[0]}&numero=${valor.split(' ')[1]}`;
-  const res = await fetch(url, {
-    headers: { 'Authorization': 'Bearer SUA_CHAVE_AQUI' }
-  });
-  const dados = await res.json();
-  return dados.processos || [];
-  */
-
-  // Por enquanto retorna vazio — substitua acima quando tiver os dados
+async function buscarDadosOab(tipo, valor) {
+  console.log(`Buscando dados OAB: ${tipo} = ${valor}`);
   return [];
 }
