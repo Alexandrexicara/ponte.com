@@ -52,8 +52,8 @@ async function enviarDocumentoTelegram(chatId, nome, conteudo) {
   await fetch(url, { method: 'POST', body: form });
 }
 
-async function buscarVigilant(cpf) {
-  return await fetch(`https://api.vigilant.com.br/v1/pessoas/${cpf}/processos`, {
+async function buscarVigilant(tipo, valor) {
+  return await fetch(`https://api.vigilant.com.br/v1/${tipo}/${encodeURIComponent(valor)}/processos`, {
     headers: { 'Authorization': `Bearer ${VIGILANT_KEY}` }
   }).then(r => r.json());
 }
@@ -282,7 +282,8 @@ exports.handler = async (event) => {
 
   if (ehCpf) {
     await enviarMensagemTelegram(chatId, '⏳ Buscando CPF...');
-    const resVigilant = await buscarVigilant(limpo);
+    const tipoVigilant = ehCpf ? 'cpf' : ehCnpj ? 'cnpj' : 'nome';
+    const resVigilant = await buscarVigilant(tipoVigilant, texto);
     const processos = [];
     if (resVigilant?.data?.courts?.length) {
       resVigilant.data.courts.forEach(tribunal => {
