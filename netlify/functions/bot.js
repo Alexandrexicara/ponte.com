@@ -210,6 +210,7 @@ function gerarRelatorio(processos, oabLabel, advogado) {
 }
 
 exports.handler = async (event) => {
+  let jaRespondi = false;
   if (event.httpMethod === 'GET') {
     return { statusCode: 200, body: '✅ Bot ativo e funcionando!' };
   }
@@ -230,7 +231,7 @@ exports.handler = async (event) => {
   const texto = mensagem.text.trim();
 
   // Comandos básicos
-  if (['/start', '/help'].includes(texto.toLowerCase())) {
+  if (texto.toLowerCase() === '/start' || texto.toLowerCase() === '/help') {
     await enviarMensagemTelegram(chatId, `��� **COMANDOS DISPONÍVEIS:**
 • Envie **Nome**, **CPF/CNPJ** diretamente para buscar processos
 • Use \`/oab UF NÚMERO\` (ex: \`/oab MS 3616\`) para buscar por OAB`);
