@@ -1,3 +1,4 @@
+const API_URL = "/.netlify/functions/consultar";
   const cabecalhos = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest'
