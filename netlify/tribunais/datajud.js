@@ -1,3 +1,5 @@
+console.log("DATAJUD CARREGADO");
+
 const fetch = require('node-fetch');
 
 const BASE_URL = "https://api-publica.datajud.cnj.jus.br";
@@ -11,6 +13,8 @@ const TRIBUNAIS = {
 
 module.exports = async (parametros) => {
   try {
+    console.log("DATAJUD CONSULTA INICIADA", parametros);
+    
     const resultados = [];
     const { uf, numeroOAB } = parametros;
 
@@ -61,7 +65,7 @@ module.exports = async (parametros) => {
 
     return resultados;
   } catch (erro) {
-    console.log(`DataJud: ${erro.message}`);
+    console.log(`DataJud ERRO: ${erro.message}`);
     return [];
   }
 };
