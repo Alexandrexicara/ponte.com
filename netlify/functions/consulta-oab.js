@@ -1,11 +1,11 @@
-const tjsp = require('../../tribunais/tjsp');
-const tjms = require('../../tribunais/tjms');
-const tjmg = require('../../tribunais/tjmg');
-const datajud = require('../../tribunais/datajud');
-const removerDuplicados = require('../../utils/removerDuplicados');
-const { validarOAB, limparOAB } = require('../../utils/validar');
-const cache = require('../../utils/cache');
-const logger = require('../../utils/logger');
+const tjsp = require('../tribunais/tjsp');
+const tjms = require('../tribunais/tjms');
+const tjmg = require('../tribunais/tjmg');
+const datajud = require('../tribunais/datajud');
+const removerDuplicados = require('../utils/removerDuplicados');
+const { validarOAB, limparOAB } = require('../utils/validar');
+const cache = require('../utils/cache');
+const logger = require('../utils/logger');
 
 exports.handler = async (event) => {
   const { oab } = event.queryStringParameters || {};
