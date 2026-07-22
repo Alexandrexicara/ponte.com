@@ -21,24 +21,84 @@ function doReq(host, path, headers) {
 
 function extrairCNJs(html) {
   const cnjs = [];
-  // Padrão CNJ completo
-  const regex1 = /\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}/g;
-  // Padrão alternativo (sem pontos)
-  const regex2 = /\d{7}\d{2}\d{4}\d{1}\d{2}\d{4}/g;
-  
+  const regex = /\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}/g;
   let match;
-  while ((match = regex1.exec(html)) !== null) {
+  while ((match = regex.exec(html)) !== null) {
     if (!cnjs.includes(match[0])) {
       cnjs.push(match[0]);
     }
   }
-  while ((match = regex2.exec(html)) !== null) {
-    const cnjFormatado = match[0].replace(/(\d{7})(\d{2})(\d{4})(\d{1})(\d{2})(\d{4})/, '$1-$2.$3.$4.$5.$6');
-    if (!cnjs.includes(cnjFormatado)) {
-      cnjs.push(cnjFormatado);
-    }
-  }
   return cnjs;
+}
+
+// API do ESAJ/TJSP - aceita requisições de bots
+async function buscarESAJ(uf, numero) {
+  try {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (compatible; BotAPI/1.0)',
+      'Accept': 'application/json'
+    };
+    
+    // Endpoint do ESAJ para busca por OAB
+    const url = `/cposg/open.do`;
+    const params = `conversationId=&paginaConsulta=1&tipoNuProcesso=UNIFICADO&codigoOab=${numero}&nomeOab=&tipoConsulta=porOab&dadosConsulta.valorCampoOab=${numero}&dadosConsulta.valorCampoNomeOab=&uuidCaptcha=`;
+    
+    console.log('Buscando ESAJ/TJSP...');
+    const res = await doReq('esaj.tjsp.jus.br', url + '?' + params, headers);
+    console.log('Status ESAJ:', res.status);
+    
+    if (res.status === 200) {
+      const cnjs = extrairCNJs(res.data);
+      console.log('CNJs encontrados ESAJ:', cnjs.length);
+      return cnjs.map(cnj => ({
+        numero_cnj: cnj,
+        fontes: [{ nome: 'ESAJ/TJSP', capa: { classe: '', assunto: '' } }]
+      }));
+    }
+    return [];
+  } catch (e) {
+    console.log('Erro ESAJ:', e.message);
+    return [];
+  }
+}
+
+// API do CNJ - endpoint público
+async function buscarCNJ(uf, numero) {
+  try {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (compatible; BotAPI/1.0)',
+      'Accept': 'application/json'
+    };
+    
+    const url = `/cnj/consultas/publicas/processo`;
+    const params = `oab=${numero}&uf=${uf}`;
+    
+    console.log('Buscando CNJ...');
+    const res = await doReq('api-publica.cnj.jus.br', url + '?' + params, headers);
+    console.log('Status CNJ:', res.status);
+    
+    if (res.status === 200) {
+      try {
+        const json = JSON.parse(res.data);
+        if (json && json.processos) {
+          return json.processos.map(p => ({
+            numero_cnj: p.numero_cnj || p.numero,
+            fontes: [{ nome: 'CNJ API', capa: { classe: p.classe || '', assunto: p.assunto || '' } }]
+          }));
+        }
+      } catch (e) {
+        const cnjs = extrairCNJs(res.data);
+        return cnjs.map(cnj => ({
+          numero_cnj: cnj,
+          fontes: [{ nome: 'CNJ API', capa: { classe: '', assunto: '' } }]
+        }));
+      }
+    }
+    return [];
+  } catch (e) {
+    console.log('Erro CNJ:', e.message);
+    return [];
+  }
 }
 
 exports.handler = async (event) => {
@@ -52,61 +112,13 @@ exports.handler = async (event) => {
       const [uf, numero] = valor.trim().split(/\s+/);
       console.log('OAB:', uf, numero);
 
-      const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-      };
+      // Busca no ESAJ/TJSP
+      const esajResult = await buscarESAJ(uf, numero);
+      processos = processos.concat(esajResult);
 
-      // Busca no CNJ - removido temporariamente (URL incorreta)
-      // try {
-      //   const urlCnj = `/csg/consultaProcessual?tipoConsulta=1&numeroOab=${numero}&ufOab=${uf}`;
-      //   console.log('Buscando CNJ...');
-      //   const res = await doReq('www.cnj.jus.br', urlCnj, headers);
-      //   console.log('Status CNJ:', res.status, 'Tamanho HTML:', res.data.length);
-      //   if (res.status === 200) {
-      //     const cnjs = extrairCNJs(res.data);
-      //     console.log('CNJs encontrados CNJ:', cnjs.length);
-      //     if (cnjs.length > 0) console.log('Primeiro CNJ:', cnjs[0]);
-      //     cnjs.forEach(cnj => {
-      //       processos.push({
-      //         numero_cnj: cnj,
-      //         fontes: [{ nome: 'CNJ Oficial', capa: { classe: '', assunto: '' } }]
-      //       });
-      //     });
-      //   }
-      // } catch (e) { console.log('Erro CNJ:', e.message); }
-
-      // Busca no CNA OAB - API interna
-      try {
-        const urlCna = `/api/v1/advogado/${uf}/${numero}/processos`;
-        console.log('Buscando CNA OAB API...');
-        const res = await doReq('cna.oab.org.br', urlCna, headers);
-        console.log('Status CNA API:', res.status, 'Tamanho:', res.data.length);
-        if (res.status === 200) {
-          console.log('Resposta API:', res.data.substring(0, 500));
-          try {
-            const json = JSON.parse(res.data);
-            if (json && json.processos) {
-              json.processos.forEach(proc => {
-                processos.push({
-                  numero_cnj: proc.numero_cnj || proc.numero || '',
-                  fontes: [{ nome: 'OAB Nacional', capa: { classe: proc.classe || '', assunto: proc.assunto || '' } }]
-                });
-              });
-            }
-          } catch (e) {
-            console.log('Erro parse JSON:', e.message);
-            // Fallback para regex
-            const cnjs = extrairCNJs(res.data);
-            cnjs.forEach(cnj => {
-              processos.push({
-                numero_cnj: cnj,
-                fontes: [{ nome: 'OAB Nacional', capa: { classe: '', assunto: '' } }]
-              });
-            });
-          }
-        }
-      } catch (e) { console.log('Erro CNA API:', e.message); }
+      // Busca no CNJ
+      const cnjResult = await buscarCNJ(uf, numero);
+      processos = processos.concat(cnjResult);
 
       // Remove duplicatas
       processos = processos.filter((p, i, a) => a.findIndex(x => x.numero_cnj === p.numero_cnj) === i);
@@ -116,7 +128,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ total: processos.length, itens: processos, origem: 'Fontes Públicas Nacionais' })
+      body: JSON.stringify({ total: processos.length, itens: processos, origem: 'APIs Públicas de Tribunais' })
     };
   } catch (erro) {
     console.log('Erro geral:', erro.message);
