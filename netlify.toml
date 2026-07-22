@@ -1,8 +1,4 @@
 [build]
-  publish = "."
-  functions = "netlify/functions"
-
-[[redirects]]
-  from = "/api/bot"
-  to = "/.netlify/functions/bot"
-  status = 200
+  publish = "public"
+  functions = "api/netlify/functions"
+  command = "cd api && npm install"
