@@ -52,10 +52,11 @@ exports.handler = async (event) => {
         const urlCnj = `/consulta-processual/?q=OAB+${uf}+${numero}`;
         console.log('Buscando CNJ...');
         const res = await doReq('www.cnj.jus.br', urlCnj, headers);
-        console.log('Status CNJ:', res.status);
+        console.log('Status CNJ:', res.status, 'Tamanho HTML:', res.data.length);
         if (res.status === 200) {
           const cnjs = extrairCNJs(res.data);
           console.log('CNJs encontrados CNJ:', cnjs.length);
+          if (cnjs.length > 0) console.log('Primeiro CNJ:', cnjs[0]);
           cnjs.forEach(cnj => {
             processos.push({
               numero_cnj: cnj,
@@ -70,10 +71,11 @@ exports.handler = async (event) => {
         const urlCna = `/Consulta/Advogado?uf=${uf}&numero=${numero}`;
         console.log('Buscando CNA OAB...');
         const res = await doReq('cna.oab.org.br', urlCna, headers);
-        console.log('Status CNA:', res.status);
+        console.log('Status CNA:', res.status, 'Tamanho HTML:', res.data.length);
         if (res.status === 200) {
           const cnjs = extrairCNJs(res.data);
           console.log('CNJs encontrados CNA:', cnjs.length);
+          if (cnjs.length > 0) console.log('Primeiro CNJ:', cnjs[0]);
           cnjs.forEach(cnj => {
             processos.push({
               numero_cnj: cnj,
