@@ -21,11 +21,21 @@ function doReq(host, path, headers) {
 
 function extrairCNJs(html) {
   const cnjs = [];
-  const regex = /\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}/g;
+  // Padrão CNJ completo
+  const regex1 = /\d{7}-\d{2}\.\d{4}\.\d{1}\.\d{2}\.\d{4}/g;
+  // Padrão alternativo (sem pontos)
+  const regex2 = /\d{7}\d{2}\d{4}\d{1}\d{2}\d{4}/g;
+  
   let match;
-  while ((match = regex.exec(html)) !== null) {
+  while ((match = regex1.exec(html)) !== null) {
     if (!cnjs.includes(match[0])) {
       cnjs.push(match[0]);
+    }
+  }
+  while ((match = regex2.exec(html)) !== null) {
+    const cnjFormatado = match[0].replace(/(\d{7})(\d{2})(\d{4})(\d{1})(\d{2})(\d{4})/, '$1-$2.$3.$4.$5.$6');
+    if (!cnjs.includes(cnjFormatado)) {
+      cnjs.push(cnjFormatado);
     }
   }
   return cnjs;
@@ -47,24 +57,24 @@ exports.handler = async (event) => {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       };
 
-      // Busca no CNJ
-      try {
-        const urlCnj = `/csg/consultaProcessual?tipoConsulta=1&numeroOab=${numero}&ufOab=${uf}`;
-        console.log('Buscando CNJ...');
-        const res = await doReq('www.cnj.jus.br', urlCnj, headers);
-        console.log('Status CNJ:', res.status, 'Tamanho HTML:', res.data.length);
-        if (res.status === 200) {
-          const cnjs = extrairCNJs(res.data);
-          console.log('CNJs encontrados CNJ:', cnjs.length);
-          if (cnjs.length > 0) console.log('Primeiro CNJ:', cnjs[0]);
-          cnjs.forEach(cnj => {
-            processos.push({
-              numero_cnj: cnj,
-              fontes: [{ nome: 'CNJ Oficial', capa: { classe: '', assunto: '' } }]
-            });
-          });
-        }
-      } catch (e) { console.log('Erro CNJ:', e.message); }
+      // Busca no CNJ - removido temporariamente (URL incorreta)
+      // try {
+      //   const urlCnj = `/csg/consultaProcessual?tipoConsulta=1&numeroOab=${numero}&ufOab=${uf}`;
+      //   console.log('Buscando CNJ...');
+      //   const res = await doReq('www.cnj.jus.br', urlCnj, headers);
+      //   console.log('Status CNJ:', res.status, 'Tamanho HTML:', res.data.length);
+      //   if (res.status === 200) {
+      //     const cnjs = extrairCNJs(res.data);
+      //     console.log('CNJs encontrados CNJ:', cnjs.length);
+      //     if (cnjs.length > 0) console.log('Primeiro CNJ:', cnjs[0]);
+      //     cnjs.forEach(cnj => {
+      //       processos.push({
+      //         numero_cnj: cnj,
+      //         fontes: [{ nome: 'CNJ Oficial', capa: { classe: '', assunto: '' } }]
+      //       });
+      //     });
+      //   }
+      // } catch (e) { console.log('Erro CNJ:', e.message); }
 
       // Busca no CNA OAB
       try {
@@ -73,6 +83,7 @@ exports.handler = async (event) => {
         const res = await doReq('cna.oab.org.br', urlCna, headers);
         console.log('Status CNA:', res.status, 'Tamanho HTML:', res.data.length);
         if (res.status === 200) {
+          console.log('Primeiros 500 chars HTML:', res.data.substring(0, 500));
           const cnjs = extrairCNJs(res.data);
           console.log('CNJs encontrados CNA:', cnjs.length);
           if (cnjs.length > 0) console.log('Primeiro CNJ:', cnjs[0]);
