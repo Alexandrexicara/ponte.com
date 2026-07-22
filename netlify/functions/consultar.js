@@ -14,7 +14,7 @@ function doReq(host, path, headers) {
       res.on('end', () => ok({ status: res.statusCode, data }));
     });
     req.on('error', fail);
-    req.setTimeout(5000, () => { req.destroy(); fail(new Error('Timeout')); });
+    req.setTimeout(10000, () => { req.destroy(); fail(new Error('Timeout')); });
     req.end();
   });
 }
@@ -49,7 +49,7 @@ exports.handler = async (event) => {
 
       // Busca no CNJ
       try {
-        const urlCnj = `/consulta-processual/?q=OAB+${uf}+${numero}`;
+        const urlCnj = `/csg/consultaProcessual?tipoConsulta=1&numeroOab=${numero}&ufOab=${uf}`;
         console.log('Buscando CNJ...');
         const res = await doReq('www.cnj.jus.br', urlCnj, headers);
         console.log('Status CNJ:', res.status, 'Tamanho HTML:', res.data.length);
