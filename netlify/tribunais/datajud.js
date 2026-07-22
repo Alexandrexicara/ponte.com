@@ -12,9 +12,10 @@ const TRIBUNAIS = {
 module.exports = async (parametros) => {
   try {
     const resultados = [];
-    const oab = parametros?.advogado?.numeroOAB;
+    const { uf, numeroOAB } = parametros;
 
-    if (!oab) return [];
+    if (!numeroOAB) return [];
+    console.log(`Buscando DataJud — OAB: ${numeroOAB} | UF: ${uf || 'todas'}`);
 
     for (const [sigla, rota] of Object.entries(TRIBUNAIS)) {
       try {
@@ -29,7 +30,7 @@ module.exports = async (parametros) => {
             query: {
               bool: {
                 must: [
-                  { match: { "advogados.numeroOAB": oab } }
+                  { match: { "advogados.numeroOAB": numeroOAB } }
                 ]
               }
             }
@@ -60,7 +61,7 @@ module.exports = async (parametros) => {
 
     return resultados;
   } catch (erro) {
-    console.log("DataJud:", erro.message);
+    console.log(`DataJud: ${erro.message}`);
     return [];
   }
 };

@@ -3,21 +3,23 @@ const tjms = require('../tribunais/tjms');
 const tjmg = require('../tribunais/tjmg');
 const datajud = require('../tribunais/datajud');
 const removerDuplicados = require('../utils/removerDuplicados');
-const { limparOAB } = require('../utils/validar');
+const { limparOAB, separarOAB } = require('../utils/validar');
 
 exports.handler = async (event) => {
   const { valor } = event.queryStringParameters || {};
-  const oab = limparOAB(valor || '');
+  const oabBruta = valor || '';
+  const oabLimpa = limparOAB(oabBruta);
+  const { uf, numero } = separarOAB(oabBruta);
 
-  console.log(`Requisição recebida: OAB ${oab}`);
+  console.log(`Requisição recebida: OAB ${oabLimpa}`);
+  console.log(`CHAMANDO DATAJUD — UF: ${uf} | Número: ${numero}`);
 
   try {
-    // Busca PARALELA em todas as fontes
     const [resTJSP, resTJMS, resTJMG, resDataJud] = await Promise.allSettled([
-      tjsp(oab),
-      tjms(oab),
-      tjmg(oab),
-      datajud({ advogado: { numeroOAB: oab } })
+      tjsp(oabLimpa),
+      tjms(oabLimpa),
+      tjmg(oabLimpa),
+      datajud({ uf, numeroOAB: numero })
     ]);
 
     const todos = [
@@ -28,7 +30,6 @@ exports.handler = async (event) => {
     ];
 
     const processos = removerDuplicados(todos);
-
     console.log(`Total processos: ${processos.length}`);
 
     return {
