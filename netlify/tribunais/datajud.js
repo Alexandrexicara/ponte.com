@@ -1,8 +1,5 @@
 const fetch = require('node-fetch');
 
-// ==============================================
-// API PÚBLICA DATAJUD - CNJ (PADRÃO OFICIAL)
-// ==============================================
 const BASE_URL = "https://api-publica.datajud.cnj.jus.br";
 const CHAVE_API = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
 
@@ -15,6 +12,9 @@ const TRIBUNAIS = {
 module.exports = async (parametros) => {
   try {
     const resultados = [];
+    const oab = parametros?.advogado?.numeroOAB;
+
+    if (!oab) return [];
 
     for (const [sigla, rota] of Object.entries(TRIBUNAIS)) {
       try {
@@ -26,7 +26,13 @@ module.exports = async (parametros) => {
           },
           body: JSON.stringify({
             size: 100,
-            query: parametros.query || { match_all: {} }
+            query: {
+              bool: {
+                must: [
+                  { match: { "advogados.numeroOAB": oab } }
+                ]
+              }
+            }
           })
         });
 
