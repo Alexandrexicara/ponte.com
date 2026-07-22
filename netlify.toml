@@ -1,4 +1,4 @@
 [build]
   publish = "public"
-  functions = "api/netlify/functions"
-  command = "cd api && npm install"
+  functions = "netlify/functions"
+  command = "cd netlify cd api && npm installcd api && npm install npm install"

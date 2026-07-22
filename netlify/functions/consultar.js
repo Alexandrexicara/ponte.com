@@ -31,72 +31,65 @@ function extrairCNJs(html) {
   return cnjs;
 }
 
-// API do ESAJ/TJSP - aceita requisições de bots
-async function buscarESAJ(uf, numero) {
+// API do TJSP - endpoint real
+async function buscarTJSP(uf, numero) {
   try {
     const headers = {
       'User-Agent': 'Mozilla/5.0 (compatible; BotAPI/1.0)',
-      'Accept': 'application/json'
+      'Accept': 'text/html'
     };
     
-    // Endpoint do ESAJ para busca por OAB
+    // Endpoint real do TJSP para consulta por OAB
     const url = `/cposg/open.do`;
-    const params = `conversationId=&paginaConsulta=1&tipoNuProcesso=UNIFICADO&codigoOab=${numero}&nomeOab=&tipoConsulta=porOab&dadosConsulta.valorCampoOab=${numero}&dadosConsulta.valorCampoNomeOab=&uuidCaptcha=`;
+    const params = `conversationId=&paginaConsulta=1&tipoNuProcesso=UNIFICADO&codigoOab=${numero}&tipoConsulta=porOab&dadosConsulta.valorCampoOab=${numero}`;
     
-    console.log('Buscando ESAJ/TJSP...');
+    console.log('Buscando TJSP...');
     const res = await doReq('esaj.tjsp.jus.br', url + '?' + params, headers);
-    console.log('Status ESAJ:', res.status);
+    console.log('Status TJSP:', res.status, 'Tamanho:', res.data.length);
     
     if (res.status === 200) {
+      console.log('Primeiros 300 chars:', res.data.substring(0, 300));
       const cnjs = extrairCNJs(res.data);
-      console.log('CNJs encontrados ESAJ:', cnjs.length);
+      console.log('CNJs encontrados TJSP:', cnjs.length);
       return cnjs.map(cnj => ({
         numero_cnj: cnj,
-        fontes: [{ nome: 'ESAJ/TJSP', capa: { classe: '', assunto: '' } }]
+        fontes: [{ nome: 'TJSP', capa: { classe: '', assunto: '' } }]
       }));
     }
     return [];
   } catch (e) {
-    console.log('Erro ESAJ:', e.message);
+    console.log('Erro TJSP:', e.message);
     return [];
   }
 }
 
-// API do CNJ - endpoint público
-async function buscarCNJ(uf, numero) {
+// API do TJMS - endpoint real
+async function buscarTJMS(uf, numero) {
   try {
     const headers = {
       'User-Agent': 'Mozilla/5.0 (compatible; BotAPI/1.0)',
-      'Accept': 'application/json'
+      'Accept': 'text/html'
     };
     
-    const url = `/cnj/consultas/publicas/processo`;
+    // Endpoint do TJMS
+    const url = `/consultapublica/ConsultaPorOab.do`;
     const params = `oab=${numero}&uf=${uf}`;
     
-    console.log('Buscando CNJ...');
-    const res = await doReq('api-publica.cnj.jus.br', url + '?' + params, headers);
-    console.log('Status CNJ:', res.status);
+    console.log('Buscando TJMS...');
+    const res = await doReq('www.tjms.jus.br', url + '?' + params, headers);
+    console.log('Status TJMS:', res.status, 'Tamanho:', res.data.length);
     
     if (res.status === 200) {
-      try {
-        const json = JSON.parse(res.data);
-        if (json && json.processos) {
-          return json.processos.map(p => ({
-            numero_cnj: p.numero_cnj || p.numero,
-            fontes: [{ nome: 'CNJ API', capa: { classe: p.classe || '', assunto: p.assunto || '' } }]
-          }));
-        }
-      } catch (e) {
-        const cnjs = extrairCNJs(res.data);
-        return cnjs.map(cnj => ({
-          numero_cnj: cnj,
-          fontes: [{ nome: 'CNJ API', capa: { classe: '', assunto: '' } }]
-        }));
-      }
+      const cnjs = extrairCNJs(res.data);
+      console.log('CNJs encontrados TJMS:', cnjs.length);
+      return cnjs.map(cnj => ({
+        numero_cnj: cnj,
+        fontes: [{ nome: 'TJMS', capa: { classe: '', assunto: '' } }]
+      }));
     }
     return [];
   } catch (e) {
-    console.log('Erro CNJ:', e.message);
+    console.log('Erro TJMS:', e.message);
     return [];
   }
 }
@@ -112,13 +105,15 @@ exports.handler = async (event) => {
       const [uf, numero] = valor.trim().split(/\s+/);
       console.log('OAB:', uf, numero);
 
-      // Busca no ESAJ/TJSP
-      const esajResult = await buscarESAJ(uf, numero);
-      processos = processos.concat(esajResult);
+      // Busca no TJSP
+      const tjspResult = await buscarTJSP(uf, numero);
+      processos = processos.concat(tjspResult);
 
-      // Busca no CNJ
-      const cnjResult = await buscarCNJ(uf, numero);
-      processos = processos.concat(cnjResult);
+      // Busca no TJMS (para MS)
+      if (uf === 'MS') {
+        const tjmsResult = await buscarTJMS(uf, numero);
+        processos = processos.concat(tjmsResult);
+      }
 
       // Remove duplicatas
       processos = processos.filter((p, i, a) => a.findIndex(x => x.numero_cnj === p.numero_cnj) === i);
