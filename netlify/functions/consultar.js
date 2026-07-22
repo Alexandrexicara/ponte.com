@@ -76,25 +76,37 @@ exports.handler = async (event) => {
       //   }
       // } catch (e) { console.log('Erro CNJ:', e.message); }
 
-      // Busca no CNA OAB
+      // Busca no CNA OAB - API interna
       try {
-        const urlCna = `/Consulta/Advogado?uf=${uf}&numero=${numero}`;
-        console.log('Buscando CNA OAB...');
+        const urlCna = `/api/v1/advogado/${uf}/${numero}/processos`;
+        console.log('Buscando CNA OAB API...');
         const res = await doReq('cna.oab.org.br', urlCna, headers);
-        console.log('Status CNA:', res.status, 'Tamanho HTML:', res.data.length);
+        console.log('Status CNA API:', res.status, 'Tamanho:', res.data.length);
         if (res.status === 200) {
-          console.log('Primeiros 500 chars HTML:', res.data.substring(0, 500));
-          const cnjs = extrairCNJs(res.data);
-          console.log('CNJs encontrados CNA:', cnjs.length);
-          if (cnjs.length > 0) console.log('Primeiro CNJ:', cnjs[0]);
-          cnjs.forEach(cnj => {
-            processos.push({
-              numero_cnj: cnj,
-              fontes: [{ nome: 'OAB Nacional', capa: { classe: '', assunto: '' } }]
+          console.log('Resposta API:', res.data.substring(0, 500));
+          try {
+            const json = JSON.parse(res.data);
+            if (json && json.processos) {
+              json.processos.forEach(proc => {
+                processos.push({
+                  numero_cnj: proc.numero_cnj || proc.numero || '',
+                  fontes: [{ nome: 'OAB Nacional', capa: { classe: proc.classe || '', assunto: proc.assunto || '' } }]
+                });
+              });
+            }
+          } catch (e) {
+            console.log('Erro parse JSON:', e.message);
+            // Fallback para regex
+            const cnjs = extrairCNJs(res.data);
+            cnjs.forEach(cnj => {
+              processos.push({
+                numero_cnj: cnj,
+                fontes: [{ nome: 'OAB Nacional', capa: { classe: '', assunto: '' } }]
+              });
             });
-          });
+          }
         }
-      } catch (e) { console.log('Erro CNA:', e.message); }
+      } catch (e) { console.log('Erro CNA API:', e.message); }
 
       // Remove duplicatas
       processos = processos.filter((p, i, a) => a.findIndex(x => x.numero_cnj === p.numero_cnj) === i);
