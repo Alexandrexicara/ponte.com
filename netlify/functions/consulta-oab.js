@@ -1,9 +1,20 @@
+function limparOAB(valor) {
+  if (!valor) return "";
+  return String(valor).trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function separarOAB(valor) {
+  if (!valor) return { uf: "", numero: "" };
+  const partes = String(valor).trim().toUpperCase().split(/\s+/);
+  if (partes.length >= 2) return { uf: partes[0], numero: partes.slice(1).join("") };
+  return { uf: "", numero: partes[0] || "" };
+}
+
 const tjsp = require('../tribunais/tjsp');
 const tjms = require('../tribunais/tjms');
 const tjmg = require('../tribunais/tjmg');
 const datajud = require('../tribunais/datajud');
 const removerDuplicados = require('../utils/removerDuplicados');
-const { limparOAB, separarOAB } = require('../utils/validar');
 
 exports.handler = async (event) => {
   const { valor } = event.queryStringParameters || {};
