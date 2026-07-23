@@ -10,17 +10,23 @@ function separarOAB(valor) {
   return { uf: "", numero: partes[0] || "" };
 }
 
-function limparOAB(valor) {
-  if (!valor) return "";
-  return String(valor).trim().toUpperCase().replace(/\s+/g, " ");
-}
-
-function separarOAB(valor) {
-  if (!valor) return { uf: "", numero: "" };
-  const partes = String(valor).trim().toUpperCase().split(/\s+/);
-  if (partes.length >= 2) return { uf: partes[0], numero: partes.slice(1).join("") };
-  return { uf: "", numero: partes[0] || "" };
-}
+// Função auxiliar: busca com timeout de 10s
+const buscarComTimeout = async (funcao, nome, ...args) => {
+  console.log(`Iniciando: ${nome}`);
+  try {
+    const resultado = await Promise.race([
+      funcao(...args),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`${nome} excedeu 10s`)), 10000)
+      )
+    ]);
+    console.log(`Concluído: ${nome} | ${resultado.length || 0} itens`);
+    return resultado;
+  } catch (erro) {
+    console.log(`Falha: ${nome} | ${erro.message}`);
+    return [];
+  }
+};
 
 const tjsp = require('../tribunais/tjsp');
 const tjms = require('../tribunais/tjms');
@@ -34,15 +40,15 @@ exports.handler = async (event) => {
   const oabLimpa = limparOAB(oabBruta);
   const { uf, numero } = separarOAB(oabBruta);
 
-  console.log(`Requisição recebida: OAB ${oabLimpa}`);
-  console.log(`CHAMANDO DATAJUD — UF: ${uf} | Número: ${numero}`);
+  console.log(`=== INÍCIO CONSULTA OAB: ${oabLimpa} ===`);
 
   try {
+    // Cada busca tem no máximo 10s — não trava todo o processo
     const [resTJSP, resTJMS, resTJMG, resDataJud] = await Promise.allSettled([
-      tjsp(oabLimpa),
-      tjms(oabLimpa),
-      tjmg(oabLimpa),
-      datajud({ uf, numeroOAB: numero })
+      buscarComTimeout(tjsp, "TJSP", oabLimpa),
+      buscarComTimeout(tjms, "TJMS", oabLimpa),
+      buscarComTimeout(tjmg, "TJMG", oabLimpa),
+      buscarComTimeout(datajud, "DataJud", { uf, numeroOAB: numero })
     ]);
 
     const todos = [
@@ -53,7 +59,7 @@ exports.handler = async (event) => {
     ];
 
     const processos = removerDuplicados(todos);
-    console.log(`Total processos: ${processos.length}`);
+    console.log(`=== FIM CONSULTA | Total: ${processos.length} ===`);
 
     return {
       statusCode: 200,
@@ -65,7 +71,7 @@ exports.handler = async (event) => {
     };
 
   } catch (erro) {
-    console.log(`Erro geral: ${erro.message}`);
+    console.log(`ERRO GERAL: ${erro.message}`);
     return {
       statusCode: 500,
       body: JSON.stringify({ erro: erro.message })
