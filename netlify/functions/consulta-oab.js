@@ -1,17 +1,29 @@
-// Usa APENAS as funções do arquivo central — sem duplicatas
 const { limparOAB, separarOAB } = require('../utils/validar');
+const tjsp = require('../tribunais/tjsp');
+const tjms = require('../tribunais/tjms');
+const tjmg = require('../tribunais/tjmg');
+const datajud = require('../tribunais/datajud');
 
-// Função auxiliar: busca com timeout de 10s
-const buscarComTimeout = async (funcao, nome, ...args) => {
-  console.log(`Iniciando: ${nome}`);
+// CONFIGURAÇÕES GERAIS
+const MAX_PROCESSOS = 200;
+const processosUnicos = new Map(); // Chave = número CNJ, valor = processo completo
+
+const adicionarSemDuplicar = (processo) => {
+  if (!processo?.numero || processosUnicos.size >= MAX_PROCESSOS) return;
+  if (!processosUnicos.has(processo.numero)) {
+    processosUnicos.set(processo.numero, processo);
+  }
+};
+
+const buscarComControle = async (funcao, nome, ...args) => {
   try {
+    console.log(`Iniciando: ${nome} | Total até agora: ${processosUnicos.size}`);
     const resultado = await Promise.race([
       funcao(...args),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`${nome} excedeu 30s`)), 30000)
-      )
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`${nome} demorou`)), 25000))
     ]);
-    console.log(`Concluído: ${nome} | ${resultado.length || 0} itens`);
+    resultado.forEach(adicionarSemDuplicar);
+    console.log(`Concluído: ${nome} | Novos: ${resultado.length} | Total: ${processosUnicos.size}`);
     return resultado;
   } catch (erro) {
     console.log(`Falha: ${nome} | ${erro.message}`);
@@ -19,52 +31,48 @@ const buscarComTimeout = async (funcao, nome, ...args) => {
   }
 };
 
-const tjsp = require('../tribunais/tjsp');
-const tjms = require('../tribunais/tjms');
-const tjmg = require('../tribunais/tjmg');
-const datajud = require('../tribunais/datajud');
-const removerDuplicados = require('../utils/removerDuplicados');
-
 exports.handler = async (event) => {
   const { valor } = event.queryStringParameters || {};
-  const oabBruta = valor || '';
-  const oabLimpa = limparOAB(oabBruta);
-  const { uf, numero } = separarOAB(oabBruta);
+  const oabLimpa = limparOAB(valor || '');
+  const { uf, numero } = separarOAB(valor || '');
 
-  console.log(`=== INÍCIO CONSULTA OAB: ${oabLimpa} ===`);
+  console.log(`=== CONSULTA OAB: ${oabLimpa} | LIMITE: ${MAX_PROCESSOS} ===`);
 
-  try {
-    const [resTJSP, resTJMS, resTJMG, resDataJud] = await Promise.allSettled([
-      buscarComTimeout(tjsp, "TJSP", oabLimpa),
-      buscarComTimeout(tjms, "TJMS", oabLimpa),
-      buscarComTimeout(tjmg, "TJMG", oabLimpa),
-      buscarComTimeout(datajud, "DataJud", { uf, numeroOAB: numero })
-    ]);
+  // Busca em lote controlado
+  await Promise.allSettled([
+    buscarComControle(tjsp, "TJSP", oabLimpa),
+    buscarComControle(tjms, "TJMS", oabLimpa),
+    buscarComControle(tjmg, "TJMG", oabLimpa),
+    buscarComControle(datajud, "DataJud", { uf, numeroOAB: numero })
+  ]);
 
-    const todos = [
-      ...(resTJSP.status === 'fulfilled' ? resTJSP.value : []),
-      ...(resTJMS.status === 'fulfilled' ? resTJMS.value : []),
-      ...(resTJMG.status === 'fulfilled' ? resTJMG.value : []),
-      ...(resDataJud.status === 'fulfilled' ? resDataJud.value : [])
-    ];
+  const listaFinal = Array.from(processosUnicos.values());
 
-    const processos = removerDuplicados(todos);
-    console.log(`=== FIM CONSULTA | Total: ${processos.length} ===`);
+  // GERA O CONTEÚDO DO TXT PRONTO PARA DOWNLOAD
+  const gerarTXT = () => {
+    let txt = `==================================\nCONSULTA OAB\n==================================\n\n`;
+    txt += `OAB: ${oabLimpa}\nData: ${new Date().toLocaleDateString('pt-BR')}\nTotal encontrado: ${listaFinal.length} processos\n\n`;
+    
+    listaFinal.forEach((proc, idx) => {
+      txt += `==================================\nPROCESSO ${String(idx+1).padStart(3,'0')}\n==================================\n`;
+      txt += `CNJ: ${proc.numero || "Não informado"}\n`;
+      txt += `Tribunal: ${proc.tribunal || "Não informado"}\n`;
+      txt += `Classe: ${proc.classe || "Não informado"}\n`;
+      txt += `Assunto: ${proc.assunto || "Não informado"}\n`;
+      txt += `Data Distribuição: ${proc.data || "Não informado"}\n\n`;
+    });
+    return txt;
+  };
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        total: processos.length,
-        itens: processos,
-        origem: "APIs Públicas de Tribunais + DataJud/CNJ"
-      })
-    };
-
-  } catch (erro) {
-    console.log(`ERRO GERAL: ${erro.message}`);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ erro: erro.message })
-    };
-  }
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      total: listaFinal.length,
+      limite: MAX_PROCESSOS,
+      itens: listaFinal,
+      txt: gerarTXT(),
+      origem: "APIs Públicas + DataJud/CNJ"
+    })
+  };
 };
