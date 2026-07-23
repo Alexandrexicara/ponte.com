@@ -9,7 +9,7 @@ function doReq(host, path) {
       res.on('end', () => ok({ status: res.statusCode, data }));
     });
     req.on('error', fail);
-    req.setTimeout(10000, () => { req.destroy(); fail(new Error('Timeout')); });
+    req.setTimeout(15000, () => { req.destroy(); fail(new Error('Timeout')); });
     req.end();
   });
 }
