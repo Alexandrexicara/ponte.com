@@ -28,13 +28,13 @@ async function buscarVigilant(tipo, valor) {
 
 function formatarProcessoVigilant(processo, tribunal) {
   const link = SUPREMO_BASE + encodeURIComponent(processo.numero_processo_unico||'');
-  return `í³‹ **PROCESSO:** ${processo.numero_processo_unico||'â€”'}
-í´— **LINK:** ${link}
+  return `ï¿½ï¿½ï¿½ **PROCESSO:** ${processo.numero_processo_unico||'â€”'}
+ï¿½ï¿½ï¿½ **LINK:** ${link}
 âš–ï¸ **TRIBUNAL:** ${tribunal}
-í³‚ **CLASSE:** ${processo.classe||'NÃ£o informado'}
-í³Œ **SITUAÃ‡ÃƒO:** ${processo.situacao||'NÃ£o informado'}
-í²° **VALOR:** ${processo.valor_causa||'NÃ£o informado'}
-í³… **DATA:** ${processo.distribuido_em||'NÃ£o informado'}`;
+ï¿½ï¿½ï¿½ **CLASSE:** ${processo.classe||'NÃ£o informado'}
+ï¿½ï¿½ï¿½ **SITUAÃ‡ÃƒO:** ${processo.situacao||'NÃ£o informado'}
+ï¿½ï¿½ï¿½ **VALOR:** ${processo.valor_causa||'NÃ£o informado'}
+ï¿½ï¿½ï¿½ **DATA:** ${processo.distribuido_em||'NÃ£o informado'}`;
 }
 
 exports.handler = async (event) => {
@@ -51,7 +51,7 @@ exports.handler = async (event) => {
 
   // âœ… /START â€” APARECE PRIMEIRO, SEMPRE
   if (texto.toLowerCase() === '/start' || texto.toLowerCase() === '/help') {
-    await enviarMensagemTelegram(chatId, `í³‹ **COMANDOS DISPONÃVEIS:**
+    await enviarMensagemTelegram(chatId, `ï¿½ï¿½ï¿½ **COMANDOS DISPONÃVEIS:**
 â€¢ Envie **CPF / CNPJ / Nome** para buscar processos
 â€¢ Use \`/oab UF NÃšMERO\` (ex: \`/oab SP 12345\`)
 â€¢ Busca por CPF/CNPJ/Nome usa a Vigilante
@@ -76,9 +76,33 @@ exports.handler = async (event) => {
     return {statusCode:200,body:'OK'};
   }
 
-  // âœ… BUSCA OAB â€” AVISA E PARA
+  // âœ… BUSCA OAB
   if (texto.toLowerCase().startsWith('/oab')) {
-    await enviarMensagemTelegram(chatId, 'í´§ Busca por OAB em desenvolvimento â€” por enquanto use CPF/CNPJ/Nome.');
+    const oabValor = texto.replace('/oab', '').trim();
+    if (!oabValor) {
+      await enviarMensagemTelegram(chatId, 'âŒ Informe a OAB. Ex: /oab MS 3616');
+      return {statusCode:200,body:'OK'};
+    }
+    
+    await enviarMensagemTelegram(chatId, 'â³ Buscando processos por OAB...');
+    
+    try {
+      const url = `https://dynamic-concha-618d24.netlify.app/.netlify/functions/consulta-oab?valor=${encodeURIComponent(oabValor)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      
+      if (!data.itens || data.itens.length === 0) {
+        await enviarMensagemTelegram(chatId, 'âŒ Nenhum processo encontrado para esta OAB.');
+      } else {
+        await enviarMensagemTelegram(chatId, `âœ… ${data.total} processo(s) encontrado(s):`);
+        for (const proc of data.itens) {
+          await enviarMensagemTelegram(chatId, `ğŸ“‹ ${proc.numero_cnj}\nğŸ›ï¸ Fonte: ${proc.fontes[0]?.nome || 'N/A'}`);
+        }
+      }
+    } catch (e) {
+      await enviarMensagemTelegram(chatId, 'âŒ Erro na busca. Tente novamente.');
+      console.log('Erro OAB:', e.message);
+    }
     return {statusCode:200,body:'OK'};
   }
 
