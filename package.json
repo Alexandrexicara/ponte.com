@@ -20,6 +20,7 @@
   "homepage": "https://github.com/Alexandrexicara/ponte.com#readme",
   "dependencies": {
     "jsdom": "^29.1.1",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "pg": "^8.22.0"
   }
 }
