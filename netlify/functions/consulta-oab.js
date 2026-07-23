@@ -8,7 +8,7 @@ const buscarComTimeout = async (funcao, nome, ...args) => {
     const resultado = await Promise.race([
       funcao(...args),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`${nome} excedeu 10s`)), 10000)
+        setTimeout(() => reject(new Error(`${nome} excedeu 30s`)), 30000)
       )
     ]);
     console.log(`Concluído: ${nome} | ${resultado.length || 0} itens`);
