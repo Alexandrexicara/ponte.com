@@ -1,14 +1,5 @@
-function limparOAB(valor) {
-  if (!valor) return "";
-  return String(valor).trim().toUpperCase().replace(/\s+/g, " ");
-}
-
-function separarOAB(valor) {
-  if (!valor) return { uf: "", numero: "" };
-  const partes = String(valor).trim().toUpperCase().split(/\s+/);
-  if (partes.length >= 2) return { uf: partes[0], numero: partes.slice(1).join("") };
-  return { uf: "", numero: partes[0] || "" };
-}
+// Usa APENAS as funções do arquivo central — sem duplicatas
+const { limparOAB, separarOAB } = require('../utils/validar');
 
 // Função auxiliar: busca com timeout de 10s
 const buscarComTimeout = async (funcao, nome, ...args) => {
@@ -43,7 +34,6 @@ exports.handler = async (event) => {
   console.log(`=== INÍCIO CONSULTA OAB: ${oabLimpa} ===`);
 
   try {
-    // Cada busca tem no máximo 10s — não trava todo o processo
     const [resTJSP, resTJMS, resTJMG, resDataJud] = await Promise.allSettled([
       buscarComTimeout(tjsp, "TJSP", oabLimpa),
       buscarComTimeout(tjms, "TJMS", oabLimpa),
