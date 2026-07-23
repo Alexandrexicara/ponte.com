@@ -8,7 +8,7 @@ const datajud = require('../tribunais/datajud');
 const CONFIG = {
   MAX_PROCESSOS: 200,
   MAX_TENTATIVAS: 3,
-  LOTE_TAMANHO: 2, // 2 fontes por vez = evita bloqueio
+  LOTE_TAMANHO: 2,
   LOTE_ESPERA: 1500,
   TIMEOUT: { TJSP:20000, TJMS:20000, TJMG:15000, DataJud:25000 }
 };
@@ -57,14 +57,28 @@ const processar = async (id, oab, uf, num) => {
 };
 
 exports.handler = async ev => {
-  const {valor} = ev.queryStringParameters||{};
-  const oab = limparOAB(valor);
+  const qs = ev.queryStringParameters || {};
+  // ACEITA ?valor= OU ?oab=
+  const valor = qs.valor || qs.oab || '';
+  const oabLimpa = limparOAB(valor);
   const {uf, numero} = separarOAB(valor);
-  if (!numero) return {statusCode:400, body:JSON.stringify({erro:"OAB inválida"})};
 
-  const res = await banco.criarConsulta(oab, CONFIG.MAX_PROCESSOS);
+  console.log(`Recebido: "${valor}" → Limpo: "${oabLimpa}" → UF:${uf} Nº:${numero}`);
+
+  if (!numero || numero.length < 3) {
+    return {
+      statusCode:400,
+      body:JSON.stringify({
+        erro:"OAB inválida",
+        recebido: valor,
+        formato_correto: "MS3616 ou MS 3616"
+      })
+    };
+  }
+
+  const res = await banco.criarConsulta(oabLimpa, CONFIG.MAX_PROCESSOS);
   if (res.duplicada) return {statusCode:200, body:JSON.stringify({aviso:"Já em processamento", id:res.id, status:"PROCESSANDO"})};
 
-  processar(res.id, oab, uf, numero).catch(e=>console.log(`ERRO ${res.id}: ${e.message}`));
+  processar(res.id, oabLimpa, uf, numero).catch(e=>console.log(`ERRO ${res.id}: ${e.message}`));
   return {statusCode:202, body:JSON.stringify({id:res.id, status:"PROCESSANDO", limite:CONFIG.MAX_PROCESSOS})};
 };
