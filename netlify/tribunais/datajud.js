@@ -1,64 +1,92 @@
-console.log("DATAJUD CARREGADO — VARRER TODOS OS CAMPOS");
+console.log("DATAJUD — BUSCA POR TEXTO LIVRE");
 
 const fetch = require('node-fetch');
 
 const BASE_URL = "https://api-publica.datajud.cnj.jus.br";
 const CHAVE_API = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
-const TRIBUNAL = "api_publica_tjms";
 
-// Função auxiliar: procura por qualquer termo relacionado a OAB em todo o objeto
-const procurarOABemTudo = (obj, termo) => {
-  const resultados = [];
-  const percorrer = (dado, caminho = "") => {
-    if (!dado || typeof dado !== "object") return;
-    for (const [chave, valor] of Object.entries(dado)) {
-      const caminhoAtual = caminho ? `${caminho}.${chave}` : chave;
-      if (String(valor).toLowerCase().includes(termo.toLowerCase())) {
-        resultados.push({ caminho: caminhoAtual, valor: valor });
-      }
-      if (Array.isArray(valor)) valor.forEach((item, i) => percorrer(item, `${caminhoAtual}[${i}]`));
-      else if (typeof valor === "object") percorrer(valor, caminhoAtual);
-    }
-  };
-  percorrer(obj);
-  return resultados;
+const TRIBUNAIS = {
+  tjms: "api_publica_tjms",
+  tjsp: "api_publica_tjsp",
+  tjmg: "api_publica_tjmg"
 };
+
+// Delay simples para evitar erro 429 (muitas requisições)
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
 module.exports = async (parametros) => {
   try {
-    console.log("=== BUSCANDO ESTRUTURA COMPLETA NO TJMS ===");
+    const { numeroOAB } = parametros;
+    if (!numeroOAB) return [];
+    console.log(`Buscando OAB ${numeroOAB} em todos os campos`);
 
-    const res = await fetch(`${BASE_URL}/${TRIBUNAL}/_search`, {
-      method: "POST",
-      headers: {
-        "Authorization": `APIKey ${CHAVE_API}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ size: 1, query: { match_all: {} } })
-    });
+    const resultados = [];
 
-    if (!res.ok) { console.log("ERRO:", res.status); return []; }
-    const dados = await res.json();
-    const registro = dados.hits?.hits?.[0]?._source;
+    for (const [sigla, rota] of Object.entries(TRIBUNAIS)) {
+      try {
+        // Espera 1 segundo entre tribunais para não bater no limite
+        await esperar(1000);
 
-    if (!registro) { console.log("SEM REGISTRO"); return []; }
+        const res = await fetch(`${BASE_URL}/${rota}/_search`, {
+          method: "POST",
+          headers: {
+            "Authorization": `APIKey ${CHAVE_API}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            size: 50,
+            // BUSCA POR TEXTO LIVRE EM TODO O REGISTRO
+            query: {
+              query_string: {
+                query: `*${numeroOAB}*`,
+                default_operator: "AND"
+              }
+            }
+          })
+        });
 
-    // Mostra registro completo
-    console.log("=== REGISTRO COMPLETO ===");
-    console.log(JSON.stringify(registro, null, 2));
+        if (res.status === 429) {
+          console.log(`Limite atingido em ${sigla}, tentando novamente em 3s...`);
+          await esperar(3000);
+          // Tenta mais uma vez
+          const res2 = await fetch(`${BASE_URL}/${rota}/_search`, {
+            method: "POST",
+            headers: res.headers,
+            body: JSON.stringify({ size: 50, query: { query_string: { query: `*${numeroOAB}*` } } })
+          });
+          if (!res2.ok) continue;
+          const dados2 = await res2.json();
+          if (dados2.hits?.hits) adicionarProcessos(dados2.hits.hits, sigla, resultados);
+          continue;
+        }
 
-    // Procura por qualquer coisa que lembre advogado ou OAB
-    console.log("=== LOCAIS COM ADVOGADO/OAB ===");
-    const locais = procurarOABemTudo(registro, "oab");
-    const locais2 = procurarOABemTudo(registro, "advog");
-    const locais3 = procurarOABemTudo(registro, "3616");
-    console.log("OAB:", locais);
-    console.log("ADVOG:", locais2);
-    console.log("NUMERO:", locais3);
+        if (!res.ok) continue;
+        const dados = await res.json();
+        if (dados.hits?.hits) adicionarProcessos(dados.hits.hits, sigla, resultados);
 
-    return [];
-  } catch (e) {
-    console.log("ERRO GERAL:", e.message);
+      } catch { continue; }
+    }
+
+    console.log(`DataJud total encontrado: ${resultados.length}`);
+    return resultados;
+
+  } catch (erro) {
+    console.log(`DataJud ERRO: ${erro.message}`);
     return [];
   }
 };
+
+function adicionarProcessos(hits, sigla, lista) {
+  hits.forEach(item => {
+    const f = item._source;
+    lista.push({
+      numero: f.numeroProcesso || "",
+      tribunal: f.tribunal || sigla.toUpperCase(),
+      classe: f.classe?.nome || "",
+      assunto: f.assuntos?.[0]?.nome || "",
+      data: f.dataAjuizamento || "",
+      movimentacao: "",
+      link: `https://datajud.cnj.jus.br/processo/${f.numeroProcesso || ""}`
+    });
+  });
+}
