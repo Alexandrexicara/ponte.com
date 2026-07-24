@@ -7,21 +7,52 @@ const datajud = require('../tribunais/datajud');
 const fetch = require('node-fetch');
 
 const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
-const CHAT_ID_TEMP = process.env.CHAT_ID_DESTINO || ''; // O bot vai passar esse valor
-
 const CONFIG = {
   MAX_TOTAL: 200,
   LIMITE_POR_FONTE: 50,
-  TIMEOUT: { TJSP:8000, TJMS:8000, TJMG:5000, DataJud:15000 }
+  TIMEOUT: { TJSP:15000, TJMS:15000, TJMG:10000, DataJud:20000 }
 };
 
-async function avisarTelegram(chatId, texto) {
+// âš ï¸ COM TENTATIVA NOVAMENTE SE FALHAR
+async function avisarTelegram(chatId, texto, tentativa=1) {
   if (!chatId) return;
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' })
-  }).catch(()=>{});
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' }),
+      timeout: 10000
+    });
+  } catch (e) {
+    if (tentativa < 3) {
+      await new Promise(r => setTimeout(r, 2000));
+      return avisarTelegram(chatId, texto, tentativa+1);
+    }
+    console.log(`Falha Telegram: ${e.message}`);
+  }
+}
+
+async function enviarArquivoFinal(chatId, nome, conteudo, tentativa=1) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
+      method: 'POST',
+      body: `----ARQ----
+Content-Disposition: form-data; name="chat_id"
+
+${chatId}
+----ARQ----
+Content-Disposition: form-data; name="document"; filename="${nome}"
+
+${conteudo}
+----ARQ----`,
+      timeout: 15000
+    });
+  } catch {
+    if (tentativa < 3) {
+      await new Promise(r => setTimeout(r, 3000));
+      return enviarArquivoFinal(chatId, nome, conteudo, tentativa+1);
+    }
+  }
 }
 
 const buscarUmaVez = async (fn, nome, args, chatId) => {
@@ -59,30 +90,17 @@ const processarRapido = async (id, oab, uf, num, chatId) => {
       const dados = await buscarUmaVez(fonte.fn, fonte.nome, fonte.args, chatId);
       dados.slice(0, CONFIG.LIMITE_POR_FONTE).forEach(add);
       await banco.atualizarConsulta(id, { total: unicos.size });
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 1000));
     }
 
     const lista = Array.from(unicos.values());
     const txt = `OAB: ${oab}\nTotal final: ${lista.length}\n\n` + lista.map((p,i) =>
-      `${i+1}. ${p.numero} | ${p.tribunal||'Sem info'}`
+      `${i+1}. ${p.numero} | ${p.tribunal||'Sem informaÃ§Ã£o'}`
     ).join('\n');
 
     await banco.atualizarConsulta(id, { status: "CONCLUÃDA", processos: lista, txt });
     await avisarTelegram(chatId, `í¿ **CONSULTA FINALIZADA!**\nTotal geral: ${lista.length} processos`);
-
-    // Envia o arquivo TXT no final
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
-      method: 'POST',
-      body: `----ARQ----
-Content-Disposition: form-data; name="chat_id"
-
-${chatId}
-----ARQ----
-Content-Disposition: form-data; name="document"; filename="consulta-${oab}.txt"
-
-${txt}
-----ARQ----`
-    }).catch(()=>{});
+    await enviarArquivoFinal(chatId, `consulta-${oab}.txt`, txt);
 
   } catch (erro) {
     await banco.atualizarConsulta(id, { status: "ERRO", erros: [`Geral: ${erro.message}`] });
@@ -93,7 +111,7 @@ ${txt}
 exports.handler = async ev => {
   const qs = ev.queryStringParameters || {};
   const valor = qs.valor || qs.oab || '';
-  const chatId = qs.chat_id || ''; // Recebe o ID do chat do Telegram
+  const chatId = qs.chat_id || '';
   const oabLimpa = limparOAB(valor);
   const {uf, numero} = separarOAB(valor);
 
@@ -115,10 +133,7 @@ exports.handler = async ev => {
     })};
   }
 
-  // Avisa o cliente que comeÃ§ou
   await avisarTelegram(chatId, `í´ **INICIANDO CONSULTA PARA OAB ${oabLimpa}**\nVou te avisando cada passo...`);
-
-  // Inicia o processamento e jÃ¡ responde â€” avisos vÃ£o chegando sozinhos
   processarRapido(res.id, oabLimpa, uf, numero, chatId).catch(e=>console.log(`Erro ${res.id}: ${e.message}`));
 
   return {statusCode:202, body:JSON.stringify({
