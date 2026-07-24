@@ -1,6 +1,8 @@
 const { Pool } = require('pg');
 
-// PEGA AUTOMATICAMENTE A VARIÁVEL DA NETLIFY — NÃO PRECISA DE DADOS NO CÓDIGO
+// LOG PARA CONFIRMAR O QUE A NETLIFY ESTÁ ENVIANDO
+console.log("[VERIFICACAO] DATABASE_URL:", process.env.DATABASE_URL?.replace(/:[^:@]+@/, ":******@"));
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -16,7 +18,7 @@ module.exports = {
     if (existe.rows.length) return { duplicada: true, id: existe.rows[0].id };
 
     const id = `${oab.replace(/\W/g, "")}-${Date.now()}`;
-    console.log(`[DB] Criando consulta: ${id}`);
+    console.log(`[DB] Criando: ${id}`);
     await pool.query(
       "INSERT INTO consultas (id, oab, limite) VALUES ($1, $2, $3)",
       [id, oab, limite]
@@ -25,7 +27,7 @@ module.exports = {
   },
 
   atualizarConsulta: async (id, dados) => {
-    console.log(`[DB] Atualizando ${id}:`, Object.keys(dados));
+    console.log(`[DB] Atualizando: ${id}`);
     const campos = [];
     const valores = [];
     let idx = 1;
