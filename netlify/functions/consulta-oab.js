@@ -8,12 +8,11 @@ const fetch = require('node-fetch');
 
 const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
 const CONFIG = {
-  MAX_TOTAL: 200,
-  LIMITE_POR_FONTE: 50,
-  TIMEOUT: { TJSP:15000, TJMS:15000, TJMG:10000, DataJud:20000 }
+  MAX_TOTAL: 300,
+  LIMITE_POR_FONTE: 75,
+  TIMEOUT: { DataJud:30000, TJSP:20000, TJMS:20000, TJMG:15000 }
 };
 
-// ⚠️ COM TENTATIVA NOVAMENTE SE FALHAR
 async function avisarTelegram(chatId, texto, tentativa=1) {
   if (!chatId) return;
   try {
@@ -28,7 +27,6 @@ async function avisarTelegram(chatId, texto, tentativa=1) {
       await new Promise(r => setTimeout(r, 2000));
       return avisarTelegram(chatId, texto, tentativa+1);
     }
-    console.log(`Falha Telegram: ${e.message}`);
   }
 }
 
@@ -64,7 +62,7 @@ const buscarUmaVez = async (fn, nome, args, chatId) => {
       new Promise((_, r) => setTimeout(r, CONFIG.TIMEOUT[nome], []))
     ]);
     console.log(`✅ ${nome} — ${res?.length||0} encontrados`);
-    await avisarTelegram(chatId, `✅ ${nome}: ${res?.length||0} processos encontrados`);
+    await avisarTelegram(chatId, `✅ ${nome}: ${res?.length||0} processos`);
     return res || [];
   } catch (e) {
     console.log(`⚠️ ${nome} — falhou: ${e.message}`);
@@ -73,16 +71,17 @@ const buscarUmaVez = async (fn, nome, args, chatId) => {
   }
 };
 
-const processarRapido = async (id, oab, uf, num, chatId) => {
+const processarRapido = async (id, oab, uf, numero, chatId) => {
   try {
     const unicos = new Map();
     const add = p => p?.numero && !unicos.has(p.numero) && unicos.set(p.numero, p);
 
+    // ✅ ORDEM EXATA: PRIMEIRO DATAJUD (TODO BRASIL) → DEPOIS DEMAIS
     const fontes = [
-      {fn: tjsp, nome: "TJSP", args: [oab]},
-      {fn: tjms, nome: "TJMS", args: [oab]},
-      {fn: tjmg, nome: "TJMG", args: [oab]},
-      {fn: datajud, nome: "DataJud", args: [{uf, numeroOAB:num}]}
+      {fn: datajud, nome: "��� DataJud (Brasil inteiro)", args: [{uf:'', numeroOAB:numero}]},
+      {fn: tjsp, nome: "⚖️ TJSP", args: [oab]},
+      {fn: tjms, nome: "⚖️ TJMS", args: [oab]},
+      {fn: tjmg, nome: "⚖️ TJMG", args: [oab]}
     ];
 
     for (const fonte of fontes) {
@@ -90,21 +89,21 @@ const processarRapido = async (id, oab, uf, num, chatId) => {
       const dados = await buscarUmaVez(fonte.fn, fonte.nome, fonte.args, chatId);
       dados.slice(0, CONFIG.LIMITE_POR_FONTE).forEach(add);
       await banco.atualizarConsulta(id, { total: unicos.size });
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1200));
     }
 
     const lista = Array.from(unicos.values());
-    const txt = `OAB: ${oab}\nTotal final: ${lista.length}\n\n` + lista.map((p,i) =>
-      `${i+1}. ${p.numero} | ${p.tribunal||'Sem informação'}`
+    const txt = `OAB: ${oab}\nNúmero: ${numero}\nTotal encontrado: ${lista.length}\n\n` + lista.map((p,i) =>
+      `${i+1}. CNJ: ${p.numero}\nTRIBUNAL: ${p.tribunal||'Não informado'}\nCLASSE: ${p.classe||'—'}\n`
     ).join('\n');
 
     await banco.atualizarConsulta(id, { status: "CONCLUÍDA", processos: lista, txt });
-    await avisarTelegram(chatId, `��� **CONSULTA FINALIZADA!**\nTotal geral: ${lista.length} processos`);
+    await avisarTelegram(chatId, `��� **FINALIZADO!**\nTotal geral: ${lista.length} processos encontrados`);
     await enviarArquivoFinal(chatId, `consulta-${oab}.txt`, txt);
 
   } catch (erro) {
     await banco.atualizarConsulta(id, { status: "ERRO", erros: [`Geral: ${erro.message}`] });
-    await avisarTelegram(chatId, `❌ Erro na consulta: ${erro.message}`);
+    await avisarTelegram(chatId, `❌ Erro: ${erro.message}`);
   }
 };
 
@@ -120,25 +119,21 @@ exports.handler = async ev => {
   }
 
   await banco.pg.query(
-    "DELETE FROM consultas WHERE oab=$1 AND status='PROCESSANDO' AND criado_em < NOW() - INTERVAL '90 SECONDS'",
+    "DELETE FROM consultas WHERE oab=$1 AND status='PROCESSANDO' AND criado_em < NOW() - INTERVAL '2 MINUTES'",
     [oabLimpa]
   );
 
   const res = await banco.criarConsulta(oabLimpa, CONFIG.MAX_TOTAL);
   if (res.duplicada) {
     return {statusCode:200, body:JSON.stringify({
-      aviso:"Já estou buscando essa OAB, já já te mostro tudo!",
+      aviso:"Já estou buscando, já já te mostro tudo!",
       id: res.id,
       status:"PROCESSANDO"
     })};
   }
 
-  await avisarTelegram(chatId, `��� **INICIANDO CONSULTA PARA OAB ${oabLimpa}**\nVou te avisando cada passo...`);
+  await avisarTelegram(chatId, `��� **INICIANDO CONSULTA PARA OAB ${oabLimpa}**\nPrimeiro DataJud, depois tribunais...`);
   processarRapido(res.id, oabLimpa, uf, numero, chatId).catch(e=>console.log(`Erro ${res.id}: ${e.message}`));
 
-  return {statusCode:202, body:JSON.stringify({
-    id: res.id,
-    status:"PROCESSANDO",
-    mensagem:"Estou buscando, em instantes te aviso cada resultado!"
-  })};
+  return {statusCode:202, body:JSON.stringify({id:res.id, status:"PROCESSANDO"})};
 };
