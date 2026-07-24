@@ -1,7 +1,6 @@
 const fetch = require('node-fetch');
 const SUPREMO_BASE = 'https://supremodoseoriginal.com/?processo=';
 const VIGILANT_KEY = 'vgl_cnOgXTIqxwfIPQdsIZD-N8wuBDlDvV1D23nhMVOfLSs';
-const TEMPO_LIMITE = 20000;
 const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
 const BASE_NOSSA = 'https://dynamic-concha-618d24.netlify.app/.netlify/functions';
 
@@ -47,32 +46,6 @@ function formatarProcessoVigilant(processo, tribunal) {
 Ì≥Ö **DATA:** ${processo.distribuido_em||'N√£o informado'}`;
 }
 
-async function acompanharConsulta(chatId, idConsulta, tentativa = 1) {
-  if (tentativa > 8) {
-    return enviarMensagemTelegram(chatId, '‚è≥ Demorou mais que o esperado.');
-  }
-  try {
-    const res = await fetch(`${BASE_NOSSA}/status-consulta?id=${encodeURIComponent(idConsulta)}`);
-    if (res.headers.get('content-type')?.includes('text/plain')) {
-      const txt = await res.text();
-      await enviarMensagemTelegram(chatId, '‚úÖ **CONSULTA FINALIZADA!**');
-      return enviarArquivo(chatId, `consulta-${idConsulta}.txt`, txt);
-    }
-    const dados = await res.json();
-    if (dados.status === 'PROCESSANDO') {
-      await new Promise(r => setTimeout(r, 15000));
-      return acompanharConsulta(chatId, idConsulta, tentativa + 1);
-    }
-    if (dados.status === 'CONCLU√çDA') {
-      await enviarMensagemTelegram(chatId, `‚úÖ **FINALIZADO!**\nTotal: ${dados.total || 0}`);
-      if (dados.txt) return enviarArquivo(chatId, `consulta-${idConsulta}.txt`, dados.txt);
-    }
-  } catch {
-    await new Promise(r => setTimeout(r, 15000));
-    return acompanharConsulta(chatId, idConsulta, tentativa + 1);
-  }
-}
-
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return {statusCode:200,body:'OK'};
   let corpo;
@@ -87,7 +60,7 @@ exports.handler = async (event) => {
     await enviarMensagemTelegram(chatId, `Ì≥ã **COMANDOS:**
 ‚Ä¢ CPF/CNPJ/Nome ‚Üí busca direta
 ‚Ä¢ /oab UF N√öMERO ‚Üí ex: /oab MS 3616
-‚Ä¢ Resultado chega automaticamente!`);
+‚Ä¢ /status ID ‚Üí ver resultado final`);
     return {statusCode:200,body:'OK'};
   }
 
@@ -106,18 +79,66 @@ exports.handler = async (event) => {
     return {statusCode:200,body:'OK'};
   }
 
+  // === COMANDO /oab ===
   if (texto.toLowerCase().startsWith('/oab')) {
     const oabValor = texto.replace('/oab', '').trim();
-    if (!oabValor) return enviarMensagemTelegram(chatId, '‚ùå Ex: /oab MS 3616'), {statusCode:200,body:'OK'};
+    if (!oabValor) {
+      await enviarMensagemTelegram(chatId, '‚ùå Ex: /oab MS 3616');
+      return {statusCode:200,body:'OK'};
+    }
     await enviarMensagemTelegram(chatId, 'Ì¥ç Iniciando consulta...');
     try {
       const res = await fetch(`${BASE_NOSSA}/consulta-oab?valor=${encodeURIComponent(oabValor)}`);
       const dados = await res.json();
-      if (dados.erro) return enviarMensagemTelegram(chatId, `‚ùå ${dados.erro}`), {statusCode:200,body:'OK'};
-      if (dados.aviso) await enviarMensagemTelegram(chatId, `‚ö†Ô∏è ${dados.aviso}`);
-      else await enviarMensagemTelegram(chatId, `‚úÖ Consulta iniciada!\nÌ∂î ID: ${dados.id}`);
-      acompanharConsulta(chatId, dados.id).catch(e => console.log('Erro:', e.message));
-    } catch { await enviarMensagemTelegram(chatId, '‚ùå Erro ao iniciar.'); }
+      
+      if (dados.erro) {
+        await enviarMensagemTelegram(chatId, `‚ùå ${dados.erro}`);
+      } else if (dados.aviso) {
+        await enviarMensagemTelegram(chatId, `‚ö†Ô∏è ${dados.aviso}`);
+      } else {
+        await enviarMensagemTelegram(chatId, `‚úÖ Consulta iniciada com sucesso!
+Ì∂î ID: ${dados.id}
+‚è≥ Aguarde cerca de 1 minuto, depois use:
+/status ${dados.id}`);
+      }
+    } catch {
+      await enviarMensagemTelegram(chatId, '‚ùå Erro ao iniciar a consulta.');
+    }
+    return {statusCode:200,body:'OK'};
+  }
+
+  // === COMANDO /status ===
+  if (texto.toLowerCase().startsWith('/status')) {
+    const id = texto.replace('/status','').trim();
+    if (!id) {
+      await enviarMensagemTelegram(chatId, '‚ùå Informe o ID. Ex: /status MS3616-123456');
+      return {statusCode:200,body:'OK'};
+    }
+    await enviarMensagemTelegram(chatId, 'Ì¥ç Buscando resultado...');
+    try {
+      const res = await fetch(`${BASE_NOSSA}/status-consulta?id=${encodeURIComponent(id)}`);
+      
+      if (res.headers.get('content-type')?.includes('text/plain')) {
+        const txt = await res.text();
+        await enviarMensagemTelegram(chatId, '‚úÖ **CONSULTA FINALIZADA!**');
+        await enviarArquivo(chatId, `consulta-${id}.txt`, txt);
+      } else {
+        const d = await res.json();
+        if (d.status === 'PROCESSANDO') {
+          await enviarMensagemTelegram(chatId, `‚è≥ Ainda processando...
+Ì∂î ${d.id}
+Ì≥ä Encontrados at√© agora: ${d.total || 0}`);
+        } else if (d.status === 'CONCLU√çDA') {
+          await enviarMensagemTelegram(chatId, `‚úÖ **FINALIZADO!**
+Ì∂î ${d.id}
+Ì≥Ñ Total de processos: ${d.total || 0}`);
+        } else {
+          await enviarMensagemTelegram(chatId, `‚ùå ${d.erro || 'Consulta n√£o encontrada'}`);
+        }
+      }
+    } catch {
+      await enviarMensagemTelegram(chatId, '‚ùå Erro ao buscar o resultado.');
+    }
     return {statusCode:200,body:'OK'};
   }
 
