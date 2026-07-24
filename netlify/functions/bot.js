@@ -1,15 +1,12 @@
 const fetch = require('node-fetch');
-const API_URL = "/.netlify/functions/consultar";
 const SUPREMO_BASE = 'https://supremodoseoriginal.com/?processo=';
 const VIGILANT_KEY = 'vgl_cnOgXTIqxwfIPQdsIZD-N8wuBDlDvV1D23nhMVOfLSs';
-const TEMPO_LIMITE = 20000; // 20s m√°ximo
-
-const cabecalhos = { 'Content-Type': 'application/json' };
+const TEMPO_LIMITE = 20000;
 const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
+const BASE_NOSSA = 'https://dynamic-concha-618d24.netlify.app/.netlify/functions';
 
 async function enviarMensagemTelegram(chatId, texto) {
-  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-  await fetch(url, {
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' })
@@ -18,27 +15,24 @@ async function enviarMensagemTelegram(chatId, texto) {
 
 async function buscarVigilant(tipo, valor) {
   try {
-    const url = `https://api.vigilant.com.br/v1/${tipo}/${encodeURIComponent(valor)}/processos`;
-    return await fetch(url, {
-      headers: { 'Authorization': `Bearer ${VIGILANT_KEY}` },
-      timeout: TEMPO_LIMITE
+    return await fetch(`https://api.vigilant.com.br/v1/${tipo}/${encodeURIComponent(valor)}/processos`, {
+      headers: { 'Authorization': `Bearer ${VIGILANT_KEY}` }
     }).then(r => r.json());
   } catch { return { data: { courts: [] } }; }
 }
 
 function formatarProcessoVigilant(processo, tribunal) {
   const link = SUPREMO_BASE + encodeURIComponent(processo.numero_processo_unico||'');
-  return `ÔøΩÔøΩÔøΩ **PROCESSO:** ${processo.numero_processo_unico||'‚Äî'}
-ÔøΩÔøΩÔøΩ **LINK:** ${link}
+  return `Ì≥å **PROCESSO:** ${processo.numero_processo_unico||'‚Äî'}
+Ì¥ó **LINK:** ${link}
 ‚öñÔ∏è **TRIBUNAL:** ${tribunal}
-ÔøΩÔøΩÔøΩ **CLASSE:** ${processo.classe||'N√£o informado'}
-ÔøΩÔøΩÔøΩ **SITUA√á√ÉO:** ${processo.situacao||'N√£o informado'}
-ÔøΩÔøΩÔøΩ **VALOR:** ${processo.valor_causa||'N√£o informado'}
-ÔøΩÔøΩÔøΩ **DATA:** ${processo.distribuido_em||'N√£o informado'}`;
+Ì≥ë **CLASSE:** ${processo.classe||'N√£o informado'}
+Ì≥ä **SITUA√á√ÉO:** ${processo.situacao||'N√£o informado'}
+Ì≤∞ **VALOR:** ${processo.valor_causa||'N√£o informado'}
+Ì≥Ö **DATA:** ${processo.distribuido_em||'N√£o informado'}`;
 }
 
 exports.handler = async (event) => {
-  // ‚úÖ RESPONDE DE IMEDIATO PARA N√ÉO DAR LOOP
   if (event.httpMethod !== 'POST') return {statusCode:200,body:'OK'};
   let corpo;
   try { corpo = JSON.parse(event.body||'{}'); }
@@ -49,17 +43,14 @@ exports.handler = async (event) => {
   const chatId = msg.chat.id;
   const texto = msg.text.trim();
 
-  // ‚úÖ /START ‚Äî APARECE PRIMEIRO, SEMPRE
   if (texto.toLowerCase() === '/start' || texto.toLowerCase() === '/help') {
-    await enviarMensagemTelegram(chatId, `ÔøΩÔøΩÔøΩ **COMANDOS DISPON√çVEIS:**
-‚Ä¢ Envie **CPF / CNPJ / Nome** para buscar processos
-‚Ä¢ Use \`/oab UF N√öMERO\` (ex: \`/oab SP 12345\`)
-‚Ä¢ Busca por CPF/CNPJ/Nome usa a Vigilante
-‚Ä¢ Busca por OAB usa fontes nacionais`);
+    await enviarMensagemTelegram(chatId, `Ì≥ã **COMANDOS:**
+‚Ä¢ CPF/CNPJ/Nome ‚Üí busca processos
+‚Ä¢ /oab UF N√öMERO ‚Üí ex: /oab MS 3616
+‚Ä¢ /status ID ‚Üí ver resultado da OAB`);
     return {statusCode:200,body:'OK'};
   }
 
-  // ‚úÖ BUSCA CPF ‚Äî VIGILANTE, UMA VEZ S√ì
   const limpo = texto.replace(/\D/g,'');
   if (limpo.length === 11 || limpo.length ===14) {
     const tipo = limpo.length===11 ? 'cpf' : 'cnpj';
@@ -67,46 +58,62 @@ exports.handler = async (event) => {
     const res = await buscarVigilant(tipo, limpo);
     const processos = [];
     res?.data?.courts?.forEach(t => t.processes?.forEach(p => processos.push({proc:p,trib:t.court})));
-    if (!processos.length) {
-      await enviarMensagemTelegram(chatId, '‚ùå Nenhum processo encontrado.');
-    } else {
-      await enviarMensagemTelegram(chatId, `‚úÖ ${processos.length} processo(s) encontrado(s):`);
-      for (const item of processos) await enviarMensagemTelegram(chatId, formatarProcessoVigilant(item.proc, item.trib));
+    if (!processos.length) await enviarMensagemTelegram(chatId, '‚ùå Nenhum processo encontrado.');
+    else {
+      await enviarMensagemTelegram(chatId, `‚úÖ ${processos.length} processo(s):`);
+      for (const i of processos) await enviarMensagemTelegram(chatId, formatarProcessoVigilant(i.proc, i.trib));
     }
     return {statusCode:200,body:'OK'};
   }
 
-  // ‚úÖ BUSCA OAB
   if (texto.toLowerCase().startsWith('/oab')) {
     const oabValor = texto.replace('/oab', '').trim();
-    if (!oabValor) {
-      await enviarMensagemTelegram(chatId, '‚ùå Informe a OAB. Ex: /oab MS 3616');
-      return {statusCode:200,body:'OK'};
-    }
-    
-    await enviarMensagemTelegram(chatId, '‚è≥ Buscando processos por OAB...');
-    
+    if (!oabValor) return enviarMensagemTelegram(chatId, '‚ùå Ex: /oab MS 3616'), {statusCode:200,body:'OK'};
+    await enviarMensagemTelegram(chatId, 'Ì¥ç Iniciando consulta...');
     try {
-      const url = `https://dynamic-concha-618d24.netlify.app/.netlify/functions/consulta-oab?valor=${encodeURIComponent(oabValor)}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      
-      if (!data.itens || data.itens.length === 0) {
-        await enviarMensagemTelegram(chatId, '‚ùå Nenhum processo encontrado para esta OAB.');
-      } else {
-        await enviarMensagemTelegram(chatId, `‚úÖ ${data.total} processo(s) encontrado(s):`);
-        for (const proc of data.itens) {
-          await enviarMensagemTelegram(chatId, `üìã ${proc.numero_cnj}\nüèõÔ∏è Fonte: ${proc.fontes[0]?.nome || 'N/A'}`);
-        }
-      }
-    } catch (e) {
-      await enviarMensagemTelegram(chatId, '‚ùå Erro na busca. Tente novamente.');
-      console.log('Erro OAB:', e.message);
-    }
+      const res = await fetch(`${BASE_NOSSA}/consulta-oab?valor=${encodeURIComponent(oabValor)}`);
+      const dados = await res.json();
+      if (dados.erro) return enviarMensagemTelegram(chatId, `‚ùå ${dados.erro}`), {statusCode:200,body:'OK'};
+      if (dados.aviso) return enviarMensagemTelegram(chatId, `‚ö†Ô∏è ${dados.aviso}`), {statusCode:200,body:'OK'};
+      await enviarMensagemTelegram(chatId, `‚úÖ Consulta iniciada!
+Ì∂î ID: ${dados.id}
+‚è≥ Aguarde ~1min e use:
+/status ${dados.id}`);
+    } catch { await enviarMensagemTelegram(chatId, '‚ùå Erro ao iniciar.'); }
     return {statusCode:200,body:'OK'};
   }
 
-  // ‚úÖ BUSCA POR NOME
+  if (texto.toLowerCase().startsWith('/status')) {
+    const id = texto.replace('/status','').trim();
+    if (!id) return enviarMensagemTelegram(chatId, '‚ùå Ex: /status MS3616-123456'), {statusCode:200,body:'OK'};
+    await enviarMensagemTelegram(chatId, 'Ì¥ç Verificando...');
+    try {
+      const res = await fetch(`${BASE_NOSSA}/status-consulta?id=${encodeURIComponent(id)}`);
+      if (res.headers.get('content-type')?.includes('text/plain')) {
+        const txt = await res.text();
+        await enviarMensagemTelegram(chatId, '‚úÖ Finalizado!');
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
+          method: 'POST',
+          body: `----SEP----
+Content-Disposition: form-data; name="chat_id"
+
+${chatId}
+----SEP----
+Content-Disposition: form-data; name="document"; filename="consulta-${id}.txt"
+
+${txt}
+----SEP----`
+        });
+      } else {
+        const d = await res.json();
+        if (d.status === 'PROCESSANDO') await enviarMensagemTelegram(chatId, `‚è≥ Processando...\nÌ∂î ${d.id}\nÌ≥ä Encontrados: ${d.total||0}`);
+        else if (d.status === 'CONCLU√çDA') await enviarMensagemTelegram(chatId, `‚úÖ Finalizado!\nÌ∂î ${d.id}\nÌ≥Ñ Total: ${d.total||0}`);
+        else await enviarMensagemTelegram(chatId, `‚ùå ${d.erro||'N√£o encontrado'}`);
+      }
+    } catch { await enviarMensagemTelegram(chatId, '‚ùå Erro ao verificar.'); }
+    return {statusCode:200,body:'OK'};
+  }
+
   await enviarMensagemTelegram(chatId, '‚è≥ Buscando por nome...');
   const resNome = await buscarVigilant('nome', texto);
   const procNome = [];
