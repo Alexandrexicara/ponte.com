@@ -10,88 +10,77 @@ const CONFIG = {
   MAX_TENTATIVAS: 3,
   LOTE_TAMANHO: 2,
   LOTE_ESPERA: 1500,
-  TIMEOUT: { TJSP:20000, TJMS:20000, TJMG:15000, DataJud:25000 }
+  TIMEOUT: { TJSP:18000, TJMS:18000, TJMG:12000, DataJud:22000 }
 };
 
-console.log("=== [DEBUG] ARQUIVO CARREGADO ===");
-
-const buscarComRetry = async (fn, nome, args, id) => {
-  console.log(`[${id}] [DEBUG] INICIANDO: ${nome}`);
+const buscarComRetry = async (fn, nome, args) => {
   for (let t=1; t<=CONFIG.MAX_TENTATIVAS; t++) {
     try {
       const res = await Promise.race([
         fn(...args),
         new Promise((_,r)=>setTimeout(r, CONFIG.TIMEOUT[nome], new Error("Timeout")))
       ]);
-      console.log(`[${id}] [DEBUG] ${nome} — OK ${res?.length||0} itens`);
       return {ok:true, dados:res};
     } catch (e) {
-      console.log(`[${id}] [ERRO] ${nome} ${t}: ${e.message}`);
-      if (t<CONFIG.MAX_TENTATIVAS) await new Promise(r=>setTimeout(r,1200));
+      if (t<CONFIG.MAX_TENTATIVAS) await new Promise(r=>setTimeout(r,1000));
     }
   }
   return {ok:false, erro:"Indisponível"};
 };
 
-const processar = async (id, oab, uf, num) => {
-  console.log(`[${id}] [DEBUG] PROCESSANDO OAB:${oab}`);
-  const unicos = new Map();
-  const add = p => p?.numero && !unicos.has(p.numero) && unicos.set(p.numero,p);
+// FUNÇÃO DE PROCESSAMENTO — NÃO BLOQUEIA A RESPOSTA
+const processarAsync = async (id, oab, uf, num) => {
+  try {
+    const unicos = new Map();
+    const add = p => p?.numero && !unicos.has(p.numero) && unicos.set(p.numero,p);
 
-  const fontes = [
-    {fn:tjsp, nome:"TJSP", args:[oab]},
-    {fn:tjms, nome:"TJMS", args:[oab]},
-    {fn:tjmg, nome:"TJMG", args:[oab]},
-    {fn:datajud, nome:"DataJud", args:[{uf, numeroOAB:num}]}
-  ];
+    const fontes = [
+      {fn:tjsp, nome:"TJSP", args:[oab]},
+      {fn:tjms, nome:"TJMS", args:[oab]},
+      {fn:tjmg, nome:"TJMG", args:[oab]},
+      {fn:datajud, nome:"DataJud", args:[{uf, numeroOAB:num}]}
+    ];
 
-  for (let i=0; i<fontes.length && unicos.size<CONFIG.MAX_PROCESSOS; i+=CONFIG.LOTE_TAMANHO) {
-    const lote = fontes.slice(i, i+CONFIG.LOTE_TAMANHO);
-    console.log(`[${id}] [DEBUG] LOTE: ${lote.map(f=>f.nome).join(', ')}`);
-    await Promise.all(lote.map(async f=>{
-      const res = await buscarComRetry(f.fn,f.nome,f.args,id);
-      if (res.ok) res.dados.forEach(add);
-      else await banco.atualizarConsulta(id, {erros:[`${f.nome}: ${res.erro}`]});
-    }));
-    await banco.atualizarConsulta(id, {total:unicos.size, status:"PARCIAL"});
-    await new Promise(r=>setTimeout(r,CONFIG.LOTE_ESPERA));
+    for (let i=0; i<fontes.length && unicos.size<CONFIG.MAX_PROCESSOS; i+=CONFIG.LOTE_TAMANHO) {
+      const lote = fontes.slice(i, i+CONFIG.LOTE_TAMANHO);
+      await Promise.all(lote.map(async f=>{
+        const res = await buscarComRetry(f.fn,f.nome,f.args);
+        if (res.ok) res.dados.forEach(add);
+        else await banco.atualizarConsulta(id, {erros:[`${f.nome}: ${res.erro}`]});
+      }));
+      await banco.atualizarConsulta(id, {total:unicos.size, status:"PARCIAL"});
+      await new Promise(r=>setTimeout(r,CONFIG.LOTE_ESPERA));
+    }
+
+    const lista = Array.from(unicos.values());
+    let txt = `CONSULTA OAB ${oab}\nData: ${new Date().toLocaleDateString()}\nTotal: ${lista.length}\n\n`;
+    lista.forEach((p,i)=>txt+=`PROC ${i+1}\nCNJ:${p.numero}\nTJ:${p.tribunal}\nClasse:${p.classe}\n\n`);
+    await banco.atualizarConsulta(id, {status:"CONCLUÍDA", processos:lista, txt});
+  } catch (erro) {
+    await banco.atualizarConsulta(id, {status:"ERRO", erros:[`Falha geral: ${erro.message}`]});
   }
-
-  const lista = Array.from(unicos.values());
-  let txt = `CONSULTA OAB ${oab}\nData: ${new Date().toLocaleDateString()}\nTotal: ${lista.length}\n\n`;
-  lista.forEach((p,i)=>txt+=`PROC ${i+1}\nCNJ:${p.numero}\nTJ:${p.tribunal}\nClasse:${p.classe}\n\n`);
-  await banco.atualizarConsulta(id, {status:"CONCLUÍDA", processos:lista, txt});
-  console.log(`[${id}] [DEBUG] FINALIZADO: ${lista.length} processos`);
-  return {total:lista.length};
 };
 
 exports.handler = async ev => {
-  console.log("=== [DEBUG] REQUISIÇÃO RECEBIDA ===");
-  console.log("[DEBUG] PARAMS:", ev.queryStringParameters);
-
   const qs = ev.queryStringParameters || {};
   const valor = qs.valor || qs.oab || '';
-  console.log("[DEBUG] RECEBIDO:", valor);
-
   const oabLimpa = limparOAB(valor);
   const {uf, numero} = separarOAB(valor);
-  console.log(`[DEBUG] TRATADO: ${oabLimpa} | UF:${uf} | Nº:${numero}`);
 
   if (!numero || numero.length<3) {
-    return {statusCode:400, body:JSON.stringify({erro:"OAB inválida", formato:"MS3616"})};
+    return {statusCode:400, body:JSON.stringify({erro:"OAB inválida"})};
   }
+
+  // LIMPA CONSULTAS ANTIGAS TRAVADAS DA MESMA OAB
+  await banco.pg.query("DELETE FROM consultas WHERE oab = $1 AND status = 'PROCESSANDO' AND criado_em < NOW() - INTERVAL '2 MINUTES'", [oabLimpa]);
 
   const res = await banco.criarConsulta(oabLimpa, CONFIG.MAX_PROCESSOS);
   if (res.duplicada) {
-    return {statusCode:200, body:JSON.stringify({aviso:"Já em processamento", id:res.id, status:"PROCESSANDO"})};
+    return {statusCode:200, body:JSON.stringify({aviso:"Já buscando — aguarde 1min e consulte status", id:res.id, status:"PROCESSANDO"})};
   }
 
-  // ✅ AGORA ESPERA TERMINAR TUDO
-  await processar(res.id, oabLimpa, uf, numero);
+  // INICIA E RESPONDE LOGO — O RESTO RODA ATÉ ACABAR
+  processarAsync(res.id, oabLimpa, uf, numero).catch(e=>console.log(`Erro ${res.id}: ${e.message}`));
 
-  return {statusCode:200, body:JSON.stringify({
-    id:res.id,
-    status:"CONCLUÍDA",
-    mensagem:"Consulta finalizada — consulte o status para baixar o arquivo"
-  })};
+  return {statusCode:202, body:JSON.stringify({id:res.id, status:"PROCESSANDO", limite:CONFIG.MAX_PROCESSOS})};
 };

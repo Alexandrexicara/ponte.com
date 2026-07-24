@@ -1,18 +1,13 @@
 const { Pool } = require('pg');
 
-// MOSTRA O QUE REALMENTE CHEGA DA NETLIFY (SENHA OCULTA)
-const urlCompleta = process.env.DATABASE_URL || '';
-console.log("[DB] URL RECEBIDA:", urlCompleta.replace(/:[^:@]+@/, ":******@"));
-
-// SÓ ISSO — NENHUMA OUTRA LINHA DE USER/PASSWORD/HOST
 const pool = new Pool({
-  connectionString: urlCompleta,
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
 module.exports = {
+  pg: pool, // Expõe para limpeza automática
   criarConsulta: async (oab, limite = 200) => {
-    console.log(`[DB] Verificando duplicata: ${oab}`);
     const existe = await pool.query(
       "SELECT id FROM consultas WHERE oab = $1 AND status = 'PROCESSANDO' LIMIT 1",
       [oab]
@@ -20,7 +15,6 @@ module.exports = {
     if (existe.rows.length) return { duplicada: true, id: existe.rows[0].id };
 
     const id = `${oab.replace(/\W/g, "")}-${Date.now()}`;
-    console.log(`[DB] Criando: ${id}`);
     await pool.query(
       "INSERT INTO consultas (id, oab, limite) VALUES ($1, $2, $3)",
       [id, oab, limite]
@@ -29,7 +23,6 @@ module.exports = {
   },
 
   atualizarConsulta: async (id, dados) => {
-    console.log(`[DB] Atualizando ${id}`);
     const campos = [];
     const valores = [];
     let idx = 1;
