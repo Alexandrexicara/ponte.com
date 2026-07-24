@@ -1,10 +1,12 @@
 const { Pool } = require('pg');
 
-// LOG PARA CONFIRMAR O QUE A NETLIFY ESTÁ ENVIANDO
-console.log("[VERIFICACAO] DATABASE_URL:", process.env.DATABASE_URL?.replace(/:[^:@]+@/, ":******@"));
+// MOSTRA O QUE REALMENTE CHEGA DA NETLIFY (SENHA OCULTA)
+const urlCompleta = process.env.DATABASE_URL || '';
+console.log("[DB] URL RECEBIDA:", urlCompleta.replace(/:[^:@]+@/, ":******@"));
 
+// SÓ ISSO — NENHUMA OUTRA LINHA DE USER/PASSWORD/HOST
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: urlCompleta,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -27,7 +29,7 @@ module.exports = {
   },
 
   atualizarConsulta: async (id, dados) => {
-    console.log(`[DB] Atualizando: ${id}`);
+    console.log(`[DB] Atualizando ${id}`);
     const campos = [];
     const valores = [];
     let idx = 1;
