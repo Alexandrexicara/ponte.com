@@ -12,21 +12,6 @@ async function enviarMensagemTelegram(chatId, texto) {
   });
 }
 
-async function enviarArquivo(chatId, nome, conteudo) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
-    method: 'POST',
-    body: `----ARQ----
-Content-Disposition: form-data; name="chat_id"
-
-${chatId}
-----ARQ----
-Content-Disposition: form-data; name="document"; filename="${nome}"
-
-${conteudo}
-----ARQ----`
-  });
-}
-
 async function buscarVigilant(tipo, valor) {
   try {
     return await fetch(`https://api.vigilant.com.br/v1/${tipo}/${encodeURIComponent(valor)}/processos`, {
@@ -51,6 +36,7 @@ exports.handler = async (event) => {
   let corpo;
   try { corpo = JSON.parse(event.body||'{}'); }
   catch { return {statusCode:200,body:'OK'}; }
+
   const msg = corpo.message;
   if (!msg?.text) return {statusCode:200,body:'OK'};
   const chatId = msg.chat.id;
@@ -60,7 +46,7 @@ exports.handler = async (event) => {
     await enviarMensagemTelegram(chatId, `Ì≥ã **COMANDOS:**
 ‚Ä¢ CPF/CNPJ/Nome ‚Üí busca direta
 ‚Ä¢ /oab UF N√öMERO ‚Üí ex: /oab MS 3616
-‚Ä¢ /status ID ‚Üí ver resultado final`);
+‚Ä¢ Eu te aviso cada passo automaticamente!`);
     return {statusCode:200,body:'OK'};
   }
 
@@ -79,65 +65,25 @@ exports.handler = async (event) => {
     return {statusCode:200,body:'OK'};
   }
 
-  // === COMANDO /oab ===
+  // === BUSCA OAB ‚Äî TUDO AUTOM√ÅTICO E COM AVISOS ===
   if (texto.toLowerCase().startsWith('/oab')) {
     const oabValor = texto.replace('/oab', '').trim();
     if (!oabValor) {
       await enviarMensagemTelegram(chatId, '‚ùå Ex: /oab MS 3616');
       return {statusCode:200,body:'OK'};
     }
-    await enviarMensagemTelegram(chatId, 'Ì¥ç Iniciando consulta...');
-    try {
-      const res = await fetch(`${BASE_NOSSA}/consulta-oab?valor=${encodeURIComponent(oabValor)}`);
-      const dados = await res.json();
-      
-      if (dados.erro) {
-        await enviarMensagemTelegram(chatId, `‚ùå ${dados.erro}`);
-      } else if (dados.aviso) {
-        await enviarMensagemTelegram(chatId, `‚ö†Ô∏è ${dados.aviso}`);
-      } else {
-        await enviarMensagemTelegram(chatId, `‚úÖ Consulta iniciada com sucesso!
-Ì∂î ID: ${dados.id}
-‚è≥ Aguarde cerca de 1 minuto, depois use:
-/status ${dados.id}`);
-      }
-    } catch {
-      await enviarMensagemTelegram(chatId, '‚ùå Erro ao iniciar a consulta.');
-    }
-    return {statusCode:200,body:'OK'};
-  }
 
-  // === COMANDO /status ===
-  if (texto.toLowerCase().startsWith('/status')) {
-    const id = texto.replace('/status','').trim();
-    if (!id) {
-      await enviarMensagemTelegram(chatId, '‚ùå Informe o ID. Ex: /status MS3616-123456');
-      return {statusCode:200,body:'OK'};
-    }
-    await enviarMensagemTelegram(chatId, 'Ì¥ç Buscando resultado...');
+    await enviarMensagemTelegram(chatId, 'Ì¥ç J√° vou come√ßar e te avisar cada passo!');
     try {
-      const res = await fetch(`${BASE_NOSSA}/status-consulta?id=${encodeURIComponent(id)}`);
+      // Passa o chat_id para a fun√ß√£o poder avisar diretamente
+      const res = await fetch(`${BASE_NOSSA}/consulta-oab?valor=${encodeURIComponent(oabValor)}&chat_id=${chatId}`);
+      const dados = await res.json();
+
+      if (dados.erro) await enviarMensagemTelegram(chatId, `‚ùå ${dados.erro}`);
+      if (dados.aviso) await enviarMensagemTelegram(chatId, `‚ö†Ô∏è ${dados.aviso}`);
       
-      if (res.headers.get('content-type')?.includes('text/plain')) {
-        const txt = await res.text();
-        await enviarMensagemTelegram(chatId, '‚úÖ **CONSULTA FINALIZADA!**');
-        await enviarArquivo(chatId, `consulta-${id}.txt`, txt);
-      } else {
-        const d = await res.json();
-        if (d.status === 'PROCESSANDO') {
-          await enviarMensagemTelegram(chatId, `‚è≥ Ainda processando...
-Ì∂î ${d.id}
-Ì≥ä Encontrados at√© agora: ${d.total || 0}`);
-        } else if (d.status === 'CONCLU√çDA') {
-          await enviarMensagemTelegram(chatId, `‚úÖ **FINALIZADO!**
-Ì∂î ${d.id}
-Ì≥Ñ Total de processos: ${d.total || 0}`);
-        } else {
-          await enviarMensagemTelegram(chatId, `‚ùå ${d.erro || 'Consulta n√£o encontrada'}`);
-        }
-      }
     } catch {
-      await enviarMensagemTelegram(chatId, '‚ùå Erro ao buscar o resultado.');
+      await enviarMensagemTelegram(chatId, '‚ùå Erro ao iniciar. Mas j√° estou buscando!');
     }
     return {statusCode:200,body:'OK'};
   }
