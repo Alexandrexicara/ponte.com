@@ -2,7 +2,8 @@ const fetch = require('node-fetch');
 const SUPREMO_BASE = 'https://supremodoseoriginal.com/?processo=';
 const VIGILANT_KEY = 'vgl_cnOgXTIqxwfIPQdsIZD-N8wuBDlDvV1D23nhMVOfLSs';
 const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
-const BASE_NOSSA = 'https://dynamic-concha-618d24.netlify.app/.netlify/functions';
+const BASE_NOSSA = 'https://busca-processos.onrender.com/api/v1';
+const NOSSA_CHAVE = 'busca-processos-dev-key-2024';
 
 async function enviarMensagemTelegram(chatId, texto) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -93,7 +94,7 @@ exports.handler = async (event) => {
     if (!oabValor) return enviarMensagemTelegram(chatId, '‚ùå Ex: /oab MS 3616'), {statusCode:200,body:'OK'};
     await enviarMensagemTelegram(chatId, 'Ì¥ç Iniciando consulta...');
     try {
-      const res = await fetch(`${BASE_NOSSA}/consulta-oab?valor=${encodeURIComponent(oabValor)}&chat_id=${chatId}`);
+      const res = await fetch(`${BASE_NOSSA}/buscar/oab?valor=${encodeURIComponent(oabValor)}&chat_id=${chatId}`);
       const dados = await res.json();
       if (dados.erro) await enviarMensagemTelegram(chatId, `‚ùå ${dados.erro}`);
       else if (dados.aviso) await enviarMensagemTelegram(chatId, `‚ö†Ô∏è ${dados.aviso}`);
