@@ -1,11 +1,9 @@
 const fetch = require('node-fetch');
-const SUPREMO_BASE = 'https://supremodoseoriginal.com/?processo=';
-const VIGILANT_KEY = 'vgl_cnOgXTIqxwfIPQdsIZD-N8wuBDlDvV1D23nhMVOfLSs';
 const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
 const BASE_NOSSA = 'https://busca-processos.onrender.com/api/v1';
 const NOSSA_CHAVE = 'busca-processos-dev-key-2024';
 
-async function enviarMensagemTelegram(chatId, texto) {
+async function enviarMensagem(chatId, texto) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -13,126 +11,57 @@ async function enviarMensagemTelegram(chatId, texto) {
   }).catch(()=>{});
 }
 
-async function enviarArquivo(chatId, nome, conteudo) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
-    method: 'POST',
-    body: `----ARQ----
-Content-Disposition: form-data; name="chat_id"
-
-${chatId}
-----ARQ----
-Content-Disposition: form-data; name="document"; filename="${nome}"
-
-${conteudo}
-----ARQ----`
-  }).catch(()=>{});
-}
-
-// ‚úÖ BUSCA SOMENTE CPF/CNPJ/NOME ‚Äî VIGILANT APENAS
-async function buscarVigilant(tipo, valor) {
+async function processarComandoOAB(chatId, valorOAB) {
   try {
-    return await fetch(`https://api.vigilant.com.br/v1/${tipo}/${encodeURIComponent(valor)}/processos`, {
-      headers: { 'Authorization': `Bearer ${VIGILANT_KEY}` },
-      timeout: 15000
-    }).then(r => r.json());
-  } catch { return { data: { courts: [] } }; }
-}
+    await enviarMensagem(chatId, `Ì¥ç Iniciando consulta para OAB: ${valorOAB.toUpperCase()}`);
+    
+    const resposta = await fetch(`${BASE_NOSSA}/buscar/oab`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': NOSSA_CHAVE
+      },
+      body: JSON.stringify({ valor: valorOAB })
+    });
 
-function formatarProcessoVigilant(processo, tribunal) {
-  const link = SUPREMO_BASE + encodeURIComponent(processo.numero_processo_unico||'');
-  return `Ì≥å **PROCESSO:** ${processo.numero_processo_unico||'‚Äî'}
-Ì¥ó **LINK:** ${link}
-‚öñÔ∏è **TRIBUNAL:** ${tribunal}
-Ì≥ë **CLASSE:** ${processo.classe||'N√£o informado'}
-Ì≥ä **SITUA√á√ÉO:** ${processo.situacao||'N√£o informado'}
-Ì≤∞ **VALOR:** ${processo.valor_causa||'N√£o informado'}
-Ì≥Ö **DATA:** ${processo.distribuido_em||'N√£o informado'}`;
+    const dados = await resposta.json();
+
+    if (!resposta.ok) {
+      await enviarMensagem(chatId, `‚ùå Erro: ${dados.erro || 'Falha na consulta'}`);
+      return;
+    }
+
+    if (!dados.id) {
+      await enviarMensagem(chatId, `‚ùå API n√£o retornou ID v√°lido`);
+      return;
+    }
+
+    await enviarMensagem(chatId, `‚úÖ Consulta iniciada!\nÌ≥å ID: ${dados.id}\nAguarde o resultado...`);
+  } catch (erro) {
+    await enviarMensagem(chatId, `‚ùå Erro interno: ${erro.message}`);
+  }
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') return {statusCode:200,body:'OK'};
-  let corpo;
-  try { corpo = JSON.parse(event.body||'{}'); }
-  catch { return {statusCode:200,body:'OK'}; }
+  try {
+    const body = JSON.parse(event.body || '{}');
+    const mensagem = body.message || {};
+    const chatId = mensagem.chat?.id;
+    const texto = mensagem.text || '';
 
-  const msg = corpo.message;
-  if (!msg?.text) return {statusCode:200,body:'OK'};
-  const chatId = msg.chat.id;
-  const texto = msg.text.trim();
+    if (!chatId) return { statusCode: 200, body: 'OK' };
 
-  if (texto.toLowerCase() === '/start' || texto.toLowerCase() === '/help') {
-    await enviarMensagemTelegram(chatId, `Ì≥ã **COMANDOS:**
-‚Ä¢ CPF / CNPJ / Nome ‚Üí busca pela Vigilant
-‚Ä¢ /oab UF N√öMERO ‚Üí busca nos tribunais (nossa API)
-‚Ä¢ /status ID ‚Üí ver resultado da OAB`);
-    return {statusCode:200,body:'OK'};
-  }
-
-  // ==============================
-  // ‚úÖ CPF / CNPJ / NOME ‚Üí VIGILANT
-  // ==============================
-  const limpo = texto.replace(/\D/g,'');
-  if (limpo.length === 11 || limpo.length === 14) {
-    const tipo = limpo.length === 11 ? 'cpf' : 'cnpj';
-    await enviarMensagemTelegram(chatId, '‚è≥ Buscando...');
-    const res = await buscarVigilant(tipo, limpo);
-    const processos = [];
-    res?.data?.courts?.forEach(t => t.processes?.forEach(p => processos.push({proc:p,trib:t.court})));
-    if (!processos.length) await enviarMensagemTelegram(chatId, '‚ùå Nenhum processo encontrado.');
-    else {
-      await enviarMensagemTelegram(chatId, `‚úÖ ${processos.length} processo(s):`);
-      for (const i of processos) await enviarMensagemTelegram(chatId, formatarProcessoVigilant(i.proc, i.trib));
+    if (texto.toLowerCase().startsWith('/oab ')) {
+      const valorOAB = texto.replace(/^\/oab\s*/i, '').trim();
+      await processarComandoOAB(chatId, valorOAB);
+    } 
+    else if (texto.toLowerCase() === '/start' || texto.toLowerCase() === '/help') {
+      await enviarMensagem(chatId, `Ì±ã Bem-vindo!\nComando: /oab MS 3616`);
     }
-    return {statusCode:200,body:'OK'};
-  }
 
-  // ==============================
-  // ‚úÖ OAB ‚Üí NOSSA API (consulta-oab) ‚Äî N√ÉO USA VIGILANT
-  // ==============================
-  if (texto.toLowerCase().startsWith('/oab')) {
-    const oabValor = texto.replace('/oab', '').trim();
-    if (!oabValor) return enviarMensagemTelegram(chatId, '‚ùå Ex: /oab MS 3616'), {statusCode:200,body:'OK'};
-    await enviarMensagemTelegram(chatId, 'Ì¥ç Iniciando consulta...');
-    try {
-      const res = await fetch(`${BASE_NOSSA}/buscar/oab?valor=${encodeURIComponent(oabValor)}&chat_id=${chatId}`);
-      const dados = await res.json();
-      if (dados.erro) await enviarMensagemTelegram(chatId, `‚ùå ${dados.erro}`);
-      else if (dados.aviso) await enviarMensagemTelegram(chatId, `‚ö†Ô∏è ${dados.aviso}`);
-      else await enviarMensagemTelegram(chatId, `‚úÖ Consulta iniciada!\nÌ∂î ID: ${dados.id}`);
-    } catch { await enviarMensagemTelegram(chatId, '‚ùå Erro ao iniciar.'); }
-    return {statusCode:200,body:'OK'};
+    return { statusCode: 200, body: 'OK' };
+  } catch (erro) {
+    console.error(erro);
+    return { statusCode: 200, body: 'OK' };
   }
-
-  // ‚úÖ /status ‚Üí s√≥ para OAB
-  if (texto.toLowerCase().startsWith('/status')) {
-    const id = texto.replace('/status','').trim();
-    if (!id) return enviarMensagemTelegram(chatId, '‚ùå Ex: /status MS3616-123'), {statusCode:200,body:'OK'};
-    await enviarMensagemTelegram(chatId, 'Ì¥ç Verificando...');
-    try {
-      const res = await fetch(`${BASE_NOSSA}/status-consulta?id=${encodeURIComponent(id)}`);
-      if (res.headers.get('content-type')?.includes('text/plain')) {
-        const txt = await res.text();
-        await enviarMensagemTelegram(chatId, '‚úÖ Finalizado!');
-        await enviarArquivo(chatId, `consulta-${id}.txt`, txt);
-      } else {
-        const d = await res.json();
-        if (d.status === 'PROCESSANDO') await enviarMensagemTelegram(chatId, `‚è≥ Processando...\nEncontrados: ${d.total||0}`);
-        else if (d.status === 'CONCLU√çDA') await enviarMensagemTelegram(chatId, `‚úÖ Finalizado!\nTotal: ${d.total||0}`);
-        else await enviarMensagemTelegram(chatId, `‚ùå ${d.erro||'N√£o encontrado'}`);
-      }
-    } catch { await enviarMensagemTelegram(chatId, '‚ùå Erro.'); }
-    return {statusCode:200,body:'OK'};
-  }
-
-  // ‚úÖ BUSCA POR NOME ‚Üí SOMENTE VIGILANT
-  await enviarMensagemTelegram(chatId, '‚è≥ Buscando por nome...');
-  const resNome = await buscarVigilant('nome', texto);
-  const procNome = [];
-  resNome?.data?.courts?.forEach(t => t.processes?.forEach(p => procNome.push({proc:p,trib:t.court})));
-  if (!procNome.length) await enviarMensagemTelegram(chatId, '‚ùå Nenhum processo encontrado.');
-  else {
-    await enviarMensagemTelegram(chatId, `‚úÖ ${procNome.length} processo(s):`);
-    for (const i of procNome) await enviarMensagemTelegram(chatId, formatarProcessoVigilant(i.proc, i.trib));
-  }
-  return {statusCode:200,body:'OK'};
-};
+}
