@@ -9,15 +9,22 @@ async function enviarMensagemTelegram(chatId, texto) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' })
-  });
+  }).catch(()=>{});
 }
 
 async function buscarVigilant(tipo, valor) {
   try {
-    return await fetch(`https://api.vigilant.com.br/v1/${tipo}/${encodeURIComponent(valor)}/processos`, {
-      headers: { 'Authorization': `Bearer ${VIGILANT_KEY}` }
-    }).then(r => r.json());
-  } catch { return { data: { courts: [] } }; }
+    // ✅ CHAMA UMA VEZ SÓ — SEM TENTATIVAS INFINITAS
+    const res = await fetch(`https://api.vigilant.com.br/v1/${tipo}/${encodeURIComponent(valor)}/processos`, {
+      headers: { 'Authorization': `Bearer ${VIGILANT_KEY}` },
+      timeout: 15000 // 15s máximo — para se demorar muito
+    });
+    if (!res.ok) throw new Error(`Erro ${res.status}`);
+    return await res.json();
+  } catch (erro) {
+    console.log(`Vigilant ${tipo}: ${erro.message}`);
+    return { data: { courts: [] } };
+  }
 }
 
 function formatarProcessoVigilant(processo, tribunal) {
@@ -44,58 +51,48 @@ exports.handler = async (event) => {
 
   if (texto.toLowerCase() === '/start' || texto.toLowerCase() === '/help') {
     await enviarMensagemTelegram(chatId, `��� **COMANDOS:**
-• CPF/CNPJ/Nome → busca direta
-• /oab UF NÚMERO → ex: /oab MS 3616
-• Eu te aviso cada passo automaticamente!`);
+• CPF / CNPJ / Nome → busca direta na Vigilant
+• /oab UF NÚMERO → busca nos tribunais
+• Resultado vem na hora, sem repetição!`);
     return {statusCode:200,body:'OK'};
   }
 
+  // ✅ BUSCA CPF/CNPJ — UMA VEZ SÓ, SEM LOOP
   const limpo = texto.replace(/\D/g,'');
-  if (limpo.length === 11 || limpo.length ===14) {
-    const tipo = limpo.length===11 ? 'cpf' : 'cnpj';
-    await enviarMensagemTelegram(chatId, '⏳ Buscando...');
+  if (limpo.length === 11 || limpo.length === 14) {
+    const tipo = limpo.length === 11 ? 'cpf' : 'cnpj';
+    await enviarMensagemTelegram(chatId, '⏳ Buscando na Vigilant...');
+    
     const res = await buscarVigilant(tipo, limpo);
     const processos = [];
     res?.data?.courts?.forEach(t => t.processes?.forEach(p => processos.push({proc:p,trib:t.court})));
-    if (!processos.length) await enviarMensagemTelegram(chatId, '❌ Nenhum processo encontrado.');
-    else {
-      await enviarMensagemTelegram(chatId, `✅ ${processos.length} processo(s):`);
-      for (const i of processos) await enviarMensagemTelegram(chatId, formatarProcessoVigilant(i.proc, i.trib));
+
+    if (!processos.length) {
+      await enviarMensagemTelegram(chatId, '❌ Nenhum processo encontrado.');
+    } else {
+      await enviarMensagemTelegram(chatId, `✅ ${processos.length} processo(s) encontrado(s):`);
+      for (const item of processos) {
+        await enviarMensagemTelegram(chatId, formatarProcessoVigilant(item.proc, item.trib));
+        await new Promise(r => setTimeout(r, 300)); // pequena pausa para não travar o Telegram
+      }
     }
     return {statusCode:200,body:'OK'};
   }
 
-  // === BUSCA OAB — TUDO AUTOMÁTICO E COM AVISOS ===
-  if (texto.toLowerCase().startsWith('/oab')) {
-    const oabValor = texto.replace('/oab', '').trim();
-    if (!oabValor) {
-      await enviarMensagemTelegram(chatId, '❌ Ex: /oab MS 3616');
-      return {statusCode:200,body:'OK'};
-    }
-
-    await enviarMensagemTelegram(chatId, '��� Já vou começar e te avisar cada passo!');
-    try {
-      // Passa o chat_id para a função poder avisar diretamente
-      const res = await fetch(`${BASE_NOSSA}/consulta-oab?valor=${encodeURIComponent(oabValor)}&chat_id=${chatId}`);
-      const dados = await res.json();
-
-      if (dados.erro) await enviarMensagemTelegram(chatId, `❌ ${dados.erro}`);
-      if (dados.aviso) await enviarMensagemTelegram(chatId, `⚠️ ${dados.aviso}`);
-      
-    } catch {
-      await enviarMensagemTelegram(chatId, '❌ Erro ao iniciar. Mas já estou buscando!');
-    }
-    return {statusCode:200,body:'OK'};
-  }
-
-  await enviarMensagemTelegram(chatId, '⏳ Buscando por nome...');
+  // ✅ BUSCA POR NOME — UMA VEZ SÓ, SEM REPETIR
+  await enviarMensagemTelegram(chatId, '⏳ Buscando por nome na Vigilant...');
   const resNome = await buscarVigilant('nome', texto);
   const procNome = [];
   resNome?.data?.courts?.forEach(t => t.processes?.forEach(p => procNome.push({proc:p,trib:t.court})));
-  if (!procNome.length) await enviarMensagemTelegram(chatId, '❌ Nenhum processo encontrado.');
-  else {
-    await enviarMensagemTelegram(chatId, `✅ ${procNome.length} processo(s):`);
-    for (const i of procNome) await enviarMensagemTelegram(chatId, formatarProcessoVigilant(i.proc, i.trib));
+
+  if (!procNome.length) {
+    await enviarMensagemTelegram(chatId, '❌ Nenhum processo encontrado para esse nome.');
+  } else {
+    await enviarMensagemTelegram(chatId, `✅ ${procNome.length} processo(s) encontrado(s):`);
+    for (const i of procNome) {
+      await enviarMensagemTelegram(chatId, formatarProcessoVigilant(i.proc, i.trib));
+      await new Promise(r => setTimeout(r, 300));
+    }
   }
   return {statusCode:200,body:'OK'};
 };
