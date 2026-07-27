@@ -49,8 +49,11 @@ async function processarComandoOAB(chatId, valorOAB) {
       return;
     }
 
+    // Log para debug - mostrar o que a API retornou
+    console.log('Resposta da API:', JSON.stringify(dados));
+
     if (!dados.id) {
-      await enviarMensagem(chatId, `❌ API não retornou ID válido`);
+      await enviarMensagem(chatId, `❌ API não retornou ID válido\nResposta: ${JSON.stringify(dados).substring(0, 300)}`);
       return;
     }
 
