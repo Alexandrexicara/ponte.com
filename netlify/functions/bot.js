@@ -13,7 +13,17 @@ async function enviarMensagem(chatId, texto) {
 
 async function processarComandoOAB(chatId, valorOAB) {
   try {
-    await enviarMensagem(chatId, `í´ Iniciando consulta para OAB: ${valorOAB.toUpperCase()}`);
+    await enviarMensagem(chatId, `ðŸ” Iniciando consulta para OAB: ${valorOAB.toUpperCase()}`);
+    
+    // Parse valorOAB (formato esperado: "MS 3616")
+    const partes = valorOAB.trim().split(/\s+/);
+    const estado = partes[0]?.toUpperCase() || '';
+    const numero = partes[1] || '';
+    
+    if (!estado || !numero) {
+      await enviarMensagem(chatId, `âŒ Formato invÃ¡lido! Use: /oab UF NUMERO\nExemplo: /oab MS 3616`);
+      return;
+    }
     
     const resposta = await fetch(`${BASE_NOSSA}/buscar/oab`, {
       method: 'POST',
@@ -21,13 +31,21 @@ async function processarComandoOAB(chatId, valorOAB) {
         'Content-Type': 'application/json',
         'x-api-key': NOSSA_CHAVE
       },
-      body: JSON.stringify({ valor: valorOAB })
+      body: JSON.stringify({ estado, numero })
     });
 
-    const dados = await resposta.json();
+    let dados;
+    try {
+      dados = await resposta.json();
+    } catch (e) {
+      const texto = await resposta.text();
+      await enviarMensagem(chatId, `âŒ Erro na API: ${resposta.status}\n${texto.substring(0, 200)}`);
+      return;
+    }
 
     if (!resposta.ok) {
-      await enviarMensagem(chatId, `âŒ Erro: ${dados.erro || 'Falha na consulta'}`);
+      const erroMsg = dados.detail?.[0]?.msg || dados.erro || dados.message || 'Falha na consulta';
+      await enviarMensagem(chatId, `âŒ Erro: ${erroMsg}`);
       return;
     }
 
@@ -36,7 +54,7 @@ async function processarComandoOAB(chatId, valorOAB) {
       return;
     }
 
-    await enviarMensagem(chatId, `âœ… Consulta iniciada!\ní³Œ ID: ${dados.id}\nAguarde o resultado...`);
+    await enviarMensagem(chatId, `âœ… Consulta iniciada!\nðŸ“‹ ID: ${dados.id}\nAguarde o resultado...`);
   } catch (erro) {
     await enviarMensagem(chatId, `âŒ Erro interno: ${erro.message}`);
   }
@@ -56,7 +74,7 @@ exports.handler = async (event) => {
       await processarComandoOAB(chatId, valorOAB);
     } 
     else if (texto.toLowerCase() === '/start' || texto.toLowerCase() === '/help') {
-      await enviarMensagem(chatId, `í±‹ Bem-vindo!\nComando: /oab MS 3616`);
+      await enviarMensagem(chatId, `ï¿½ï¿½ï¿½ Bem-vindo!\nComando: /oab MS 3616`);
     }
 
     return { statusCode: 200, body: 'OK' };
