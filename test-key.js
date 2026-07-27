@@ -3,9 +3,8 @@ const fetch = require('node-fetch');
 const BASE_NOSSA = 'https://busca-processos.onrender.com/api/v1';
 const NOSSA_CHAVE = 'busca-processos-dev-key-2024';
 
-async function testKey() {
-  console.log('Testando chave:', NOSSA_CHAVE);
-  console.log('URL:', `${BASE_NOSSA}/buscar/oab`);
+async function testEndpoints() {
+  console.log('=== Testando endpoint de busca ===');
   
   try {
     const resposta = await fetch(`${BASE_NOSSA}/buscar/oab`, {
@@ -18,26 +17,34 @@ async function testKey() {
     });
 
     console.log('Status:', resposta.status);
-    console.log('Status Text:', resposta.statusText);
-    
     const texto = await resposta.text();
-    console.log('Resposta bruta:', texto);
+    console.log('Resposta completa:', texto);
+    console.log('Tamanho da resposta:', texto.length);
     
-    try {
-      const dados = JSON.parse(texto);
-      console.log('Resposta JSON:', JSON.stringify(dados, null, 2));
-    } catch (e) {
-      console.log('Não foi possível parsear como JSON');
-    }
+    const dados = JSON.parse(texto);
+    console.log('Dados parseados:', JSON.stringify(dados, null, 2));
     
-    if (resposta.ok) {
-      console.log('✅ Chave funcionou!');
-    } else {
-      console.log('❌ Chave não funcionou - erro na API');
+    if (dados.id) {
+      console.log('\n=== Testando buscar resultado pelo ID ===');
+      console.log('ID recebido:', dados.id);
+      
+      // Tentar buscar resultado
+      await new Promise(r => setTimeout(r, 2000)); // esperar 2s
+      
+      const resultadoRes = await fetch(`${BASE_NOSSA}/resultado/${dados.id}`, {
+        method: 'GET',
+        headers: {
+          'x-api-key': NOSSA_CHAVE
+        }
+      });
+      
+      console.log('Status do resultado:', resultadoRes.status);
+      const resultadoTexto = await resultadoRes.text();
+      console.log('Resposta do resultado:', resultadoTexto);
     }
   } catch (erro) {
-    console.error('❌ Erro na requisição:', erro.message);
+    console.error('Erro:', erro.message);
   }
 }
 
-testKey();
+testEndpoints();

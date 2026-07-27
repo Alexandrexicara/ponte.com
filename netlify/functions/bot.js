@@ -52,12 +52,24 @@ async function processarComandoOAB(chatId, valorOAB) {
     // Log para debug - mostrar o que a API retornou
     console.log('Resposta da API:', JSON.stringify(dados));
 
-    if (!dados.id) {
-      await enviarMensagem(chatId, `❌ API não retornou ID válido\nResposta: ${JSON.stringify(dados).substring(0, 300)}`);
+    if (!dados.sucesso) {
+      await enviarMensagem(chatId, `❌ Erro na busca: ${dados.mensagem || 'Falha desconhecida'}`);
       return;
     }
 
-    await enviarMensagem(chatId, `✅ Consulta iniciada!\n📋 ID: ${dados.id}\nAguarde o resultado...`);
+    // Mostrar resultado da busca
+    const total = dados.dados?.total_processos || 0;
+    const processos = dados.dados?.processos || [];
+    
+    if (total === 0) {
+      await enviarMensagem(chatId, `✅ Busca concluída!\n\n📋 Nenhum processo encontrado para OAB ${valorOAB.toUpperCase()}`);
+    } else {
+      let msg = `✅ Busca concluída!\n\n📋 ${total} processo(s) encontrado(s):\n\n`;
+      processos.forEach((p, i) => {
+        msg += `${i + 1}. ${p.numero || 'N/A'} - ${p.tribunal || 'N/A'}\n`;
+      });
+      await enviarMensagem(chatId, msg);
+    }
   } catch (erro) {
     await enviarMensagem(chatId, `❌ Erro interno: ${erro.message}`);
   }
