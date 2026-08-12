@@ -6,8 +6,7 @@ const NOSSA_CHAVE    = 'busca-processos-dev-key-2024';
 
 const { limparOAB, separarOAB } = require('../utils/validar');
 
-// ─── Telegram helpers ────────────────────────────────────────────────────────
-
+// ─── Enviar mensagem de texto ────────────────────────────────────────────────
 async function enviarMensagem(chatId, texto) {
   try {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -25,6 +24,7 @@ async function enviarMensagem(chatId, texto) {
   }
 }
 
+// ─── Enviar arquivo .txt ─────────────────────────────────────────────────────
 async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
   try {
     const { FormData, Blob } = require('node-fetch');
@@ -44,8 +44,7 @@ async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
   }
 }
 
-// ─── Formatação ───────────────────────────────────────────────────────────────
-
+// ─── Formatar data ────────────────────────────────────────────────────────────
 function formatarData(data) {
   if (!data) return 'N/D';
   const s = String(data);
@@ -53,12 +52,13 @@ function formatarData(data) {
   return s.substring(0, 10);
 }
 
+// ─── Link CNJ do processo ────────────────────────────────────────────────────
 function linkProcesso(numero) {
-  if (!numero) return 'N/D';
+  if (!numero) return '';
   return `https://consulta.cnj.jus.br/consulta/processo/${numero}`;
 }
 
-// Card individual de cada processo (formato do print)
+// ─── Card individual (formato do print enviado) ───────────────────────────────
 function cardProcesso(p, i) {
   const num    = p.numero || p.numeroProcesso || 'N/D';
   const link   = linkProcesso(num);
@@ -68,17 +68,17 @@ function cardProcesso(p, i) {
   const data   = formatarData(p.data || p.dataAjuizamento);
   const orgao  = p.orgao    || 'N/D';
 
-  let txt = `📋 *PROCESSO ${i}:* \`${num}\`\n`;
-  txt += `🔗 *LINK:* ${link}\n`;
-  txt += `⚖️ *TRIBUNAL:* ${trib}\n`;
-  txt += `🏛 *CLASSE:* ${classe}\n`;
-  txt += `📌 *ASSUNTO:* ${assunto}\n`;
-  txt += `📅 *DATA INÍCIO:* ${data}\n`;
-  txt += `👨‍⚖️ *ÓRGÃO JULGADOR:* ${orgao}`;
+  let txt = `PROCESSO: ${num}\n`;
+  txt += `🔗 LINK: ${link}\n`;
+  txt += `⚖️ TRIBUNAL: ${trib}\n`;
+  txt += ` CLASSE: ${classe}\n`;
+  txt += `📌 ASSUNTO: ${assunto}\n`;
+  txt += `📅 DATA INÍCIO: ${data}\n`;
+  txt += ` ÓRGÃO JULGADOR: ${orgao}`;
   return txt;
 }
 
-// Arquivo detalhes.txt com todos os processos
+// ─── Gerar arquivo detalhes.txt ───────────────────────────────────────────────
 function gerarTxt(estado, numero, processos, nomeAdvogado) {
   const linhas = [];
   linhas.push('='.repeat(60));
@@ -105,14 +105,10 @@ function gerarTxt(estado, numero, processos, nomeAdvogado) {
   return linhas.join('\n');
 }
 
-// ─── Busca e entrega ─────────────────────────────────────────────────────────
-
+// ─── Busca OAB (IGUAL ao commit 8d64abc que funcionava) + novo formato ────────
 async function processarOAB(chatId, estado, numero) {
-  // 1. Avisar que está buscando
-  await enviarMensagem(chatId, `⏳ *Buscando processos...*`);
+  await enviarMensagem(chatId, `🔍 Buscando OAB *${estado} ${numero}*...`);
 
-  // 2. Chamar nossa API (mesma chamada que funcionava antes)
-  let dados;
   try {
     const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
       method: 'POST',
@@ -122,54 +118,55 @@ async function processarOAB(chatId, estado, numero) {
       },
       body: JSON.stringify({ estado, numero }),
     });
-    dados = await resp.json();
-  } catch (e) {
-    await enviarMensagem(chatId, `❌ Erro ao consultar a API: ${e.message}`);
-    return;
-  }
 
-  if (!dados.sucesso) {
-    await enviarMensagem(chatId, `❌ ${dados.mensagem || 'Falha na consulta'}`);
-    return;
-  }
+    const dados = await resp.json();
 
-  const adv       = dados.dados?.advogado;
-  const processos = dados.dados?.processos || [];
-  const total     = dados.dados?.total_processos || processos.length;
+    if (!dados.sucesso) {
+      await enviarMensagem(chatId, `❌ Erro: ${dados.mensagem || 'Falha na consulta'}`);
+      return;
+    }
 
-  // 3. Confirmar quantidade encontrada
-  await enviarMensagem(chatId, `✅ *Encontrados ${total} processos*`);
+    const adv       = dados.dados?.advogado;
+    const processos = dados.dados?.processos || [];
+    const total     = dados.dados?.total_processos || processos.length;
 
-  if (total === 0) {
-    await enviarMensagem(chatId, `📋 Nenhum processo encontrado para OAB *${estado} ${numero}*.`);
-    return;
-  }
+    if (total === 0) {
+      await enviarMensagem(chatId, `📋 Nenhum processo encontrado para OAB *${estado} ${numero}*.`);
+      return;
+    }
 
-  // 4. Gerar e enviar arquivo detalhes.txt
-  await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.txt...*`);
-  const nomeArq  = `temp_${estado}${numero}_detalhes.txt`;
-  const conteudo = gerarTxt(estado, numero, processos, adv?.nome);
-  const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
-  await enviarArquivo(chatId, nomeArq, conteudo,
-    `📄 ${nomeArq}\n${kb} KB\n✅ Arquivo detalhes.txt gerado\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
-  );
+    // 1. Confirmar quantidade
+    await enviarMensagem(chatId, `✅ *Encontrados ${total} processos*`);
 
-  // 5. Enviar processos individualmente em cards (máx 20)
-  const limite = Math.min(processos.length, 20);
-  for (let i = 0; i < limite; i++) {
-    await enviarMensagem(chatId, cardProcesso(processos[i], i + 1));
-    if (i < limite - 1) await new Promise(r => setTimeout(r, 300));
-  }
-
-  if (total > 20) {
-    await enviarMensagem(chatId,
-      `📋 _Mostrando 20 de ${total} processos. Todos estão no arquivo detalhes.txt._`
+    // 2. Gerar e enviar arquivo detalhes.txt
+    await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.txt...*`);
+    const nomeArq  = `temp_${estado}${numero}_detalhes.txt`;
+    const conteudo = gerarTxt(estado, numero, processos, adv?.nome);
+    const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
+    await enviarArquivo(chatId, nomeArq, conteudo,
+      `📄 ${nomeArq}\n${kb} KB\n✅ Arquivo detalhes.txt gerado\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
     );
+
+    // 3. Enviar processos individualmente em cards (máx 20)
+    const limite = Math.min(processos.length, 20);
+    for (let i = 0; i < limite; i++) {
+      await enviarMensagem(chatId, cardProcesso(processos[i], i + 1));
+      if (i < limite - 1) await new Promise(r => setTimeout(r, 300));
+    }
+
+    if (total > 20) {
+      await enviarMensagem(chatId,
+        `_...e mais ${total - 20} processo(s). Todos no arquivo detalhes.txt._`
+      );
+    }
+
+  } catch (e) {
+    console.error('processarOAB error:', e);
+    await enviarMensagem(chatId, `❌ Erro ao consultar a API: ${e.message}`);
   }
 }
 
-// ─── Handler ──────────────────────────────────────────────────────────────────
-
+// ─── Handler principal ────────────────────────────────────────────────────────
 exports.handler = async (event) => {
   try {
     const body     = JSON.parse(event.body || '{}');
