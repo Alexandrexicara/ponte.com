@@ -93,8 +93,7 @@ exports.handler = async (event) => {
       if (!match) {
         await enviarMensagem(chatId, `❌ Formato inválido.\nUse: /oab UF NUMERO\nExemplo: /oab MS 3616`);
       } else {
-        processarOAB(chatId, match[1].toUpperCase(), match[2])
-          .catch(e => console.error(e));
+        await processarOAB(chatId, match[1].toUpperCase(), match[2]);
       }
 
     } else if (/^\/(start|help|ajuda)$/i.test(texto)) {
