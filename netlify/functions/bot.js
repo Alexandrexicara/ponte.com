@@ -186,26 +186,39 @@ function gerarTxt(estado, numero, processos, nomeAdvogado) {
 async function processarOAB(chatId, estado, numero) {
   await enviarMensagem(chatId, `⏳ *Buscando processos...*`);
 
+  // Acordar o Render (free tier dorme após inatividade)
+  try {
+    await fetch(`${NOSSA_API.replace('/api/v1','')}/health`, { method: 'GET' });
+  } catch(e) { /* ignorar */ }
+
   let dados, processos = [], nomeAdvogado = null;
 
-  try {
-    const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': NOSSA_CHAVE },
-      body: JSON.stringify({ estado, numero }),
-    });
-    dados = await resp.json();
-  } catch (e) {
-    await enviarMensagem(chatId, `❌ Erro ao consultar a API: ${e.message}`);
-    return;
+  // Tentar até 3 vezes (Render pode demorar para acordar)
+  for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    try {
+      const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': NOSSA_CHAVE },
+        body: JSON.stringify({ estado, numero }),
+      });
+      dados = await resp.json();
+      processos = dados.dados?.processos || [];
+      if (processos.length > 0) break; // achou, sair do loop
+      if (tentativa < 3) await new Promise(r => setTimeout(r, 3000)); // esperar 3s e tentar de novo
+    } catch (e) {
+      if (tentativa === 3) {
+        await enviarMensagem(chatId, `❌ Erro ao consultar a API: ${e.message}`);
+        return;
+      }
+      await new Promise(r => setTimeout(r, 3000));
+    }
   }
 
-  if (!dados.sucesso) {
+  if (!dados || !dados.sucesso) {
     await enviarMensagem(chatId, `❌ ${dados.mensagem || 'Erro na consulta'}`);
     return;
   }
 
-  processos     = dados.dados?.processos || [];
   nomeAdvogado  = dados.dados?.advogado?.nome || null;
   const total   = dados.dados?.total_processos || processos.length;
 
