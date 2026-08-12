@@ -4,9 +4,11 @@ const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
 const NOSSA_API      = 'https://busca-processos.onrender.com/api/v1';
 const NOSSA_CHAVE    = 'busca-processos-dev-key-2024';
 
+const { limparOAB, separarOAB } = require('../utils/validar');
+
 // ─── Telegram helpers ────────────────────────────────────────────────────────
 
-async function enviarMensagem(chatId, texto, extra = {}) {
+async function enviarMensagem(chatId, texto) {
   try {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
       method: 'POST',
@@ -16,7 +18,6 @@ async function enviarMensagem(chatId, texto, extra = {}) {
         text: texto,
         parse_mode: 'Markdown',
         disable_web_page_preview: true,
-        ...extra,
       }),
     });
   } catch (e) {
@@ -34,7 +35,6 @@ async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
       nomeArquivo
     );
     form.append('caption', legenda);
-    form.append('parse_mode', 'Markdown');
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
       method: 'POST',
       body: form,
@@ -46,134 +46,58 @@ async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
 
 // ─── Formatação ───────────────────────────────────────────────────────────────
 
-function linkProcesso(numero) {
-  if (!numero) return 'N/D';
-  // Link para consulta pública no DataJud
-  const clean = numero.replace(/\D/g, '');
-  return `https://consulta.cnj.jus.br/consulta/processo/${numero}`;
-}
-
 function formatarData(data) {
   if (!data) return 'N/D';
   const s = String(data);
-  if (s.length >= 8) {
-    return `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}`;
-  }
+  if (s.length >= 8) return `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`;
   return s.substring(0, 10);
 }
 
-function formatarValor(valor) {
-  if (!valor) return 'N/D';
-  if (typeof valor === 'number') {
-    return `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-  }
-  return String(valor);
+function linkProcesso(numero) {
+  if (!numero) return 'N/D';
+  return `https://consulta.cnj.jus.br/consulta/processo/${numero}`;
 }
 
-// Formato card do Telegram (igual ao print)
+// Card individual de cada processo (formato do print)
 function cardProcesso(p, i) {
-  const num     = p.numero || p.numeroProcesso || 'N/D';
-  const link    = linkProcesso(num);
-  const trib    = p.tribunal || 'N/D';
-  const classe  = p.classe   || 'N/D';
-  const assunto = p.assunto  || 'N/D';
-  const valor   = formatarValor(p.valor);
-  const data    = formatarData(p.data || p.dataAjuizamento);
-  const ultima  = formatarData(p.ultimaMovimentacao || p.dataUltimaAtualizacao);
-  const orgao   = p.orgao || p.orgaoJulgador || 'N/D';
+  const num    = p.numero || p.numeroProcesso || 'N/D';
+  const link   = linkProcesso(num);
+  const trib   = p.tribunal || 'N/D';
+  const classe = p.classe   || 'N/D';
+  const assunto= p.assunto  || 'N/D';
+  const data   = formatarData(p.data || p.dataAjuizamento);
+  const orgao  = p.orgao    || 'N/D';
 
-  let txt = '';
-  txt += `📋 *PROCESSO ${i}:* \`${num}\`\n`;
+  let txt = `📋 *PROCESSO ${i}:* \`${num}\`\n`;
   txt += `🔗 *LINK:* ${link}\n`;
   txt += `⚖️ *TRIBUNAL:* ${trib}\n`;
   txt += `🏛 *CLASSE:* ${classe}\n`;
   txt += `📌 *ASSUNTO:* ${assunto}\n`;
-  txt += `💰 *VALOR:* ${valor}\n`;
   txt += `📅 *DATA INÍCIO:* ${data}\n`;
-  txt += `🔄 *ÚLTIMA MOVIMENTAÇÃO:* ${ultima}\n`;
-  txt += `👨‍⚖️ *ÓRGÃO JULGADOR:* ${orgao}\n`;
-
-  // Polo ativo
-  const ativos = p.partes?.filter(x => x.polo === 'ativo' || x.tipo === 'Autor') || [];
-  if (ativos.length > 0 || p.poloAtivo) {
-    txt += `\n👤 *POLO ATIVO:*\n`;
-    const lista = ativos.length > 0 ? ativos : (Array.isArray(p.poloAtivo) ? p.poloAtivo : [p.poloAtivo]);
-    lista.forEach(parte => {
-      if (!parte) return;
-      const nome = parte.nome || parte;
-      const cpf  = parte.cpf  ? ` | CPF: ${parte.cpf}`  : '';
-      const tel  = parte.telefone ? ` | TEL: ${parte.telefone}` : ' | TEL: Não informado';
-      txt += `- ${nome}${cpf}${tel}\n`;
-      if (parte.advogados?.length > 0) {
-        parte.advogados.forEach(adv => {
-          txt += `  ⚖️ *Advogado:* ${adv.nome || adv}`;
-          if (adv.cpf) txt += ` | CPF: ${adv.cpf}`;
-          txt += '\n';
-        });
-      }
-    });
-  }
-
-  // Polo passivo
-  const passivos = p.partes?.filter(x => x.polo === 'passivo' || x.tipo === 'Réu') || [];
-  if (passivos.length > 0 || p.poloPassivo) {
-    txt += `\n👥 *POLO PASSIVO:*\n`;
-    const lista = passivos.length > 0 ? passivos : (Array.isArray(p.poloPassivo) ? p.poloPassivo : [p.poloPassivo]);
-    lista.forEach(parte => {
-      if (!parte) return;
-      const nome  = parte.nome || parte;
-      const doc   = parte.cpf ? ` | CPF: ${parte.cpf}` : (parte.cnpj ? ` | CNPJ: ${parte.cnpj}` : '');
-      const tel   = parte.telefone ? ` | TEL: ${parte.telefone}` : ' | TEL: Não informado';
-      txt += `- ${nome}${doc}${tel}\n`;
-    });
-  }
-
+  txt += `👨‍⚖️ *ÓRGÃO JULGADOR:* ${orgao}`;
   return txt;
 }
 
-// Formato detalhes.txt (completo, para o arquivo)
+// Arquivo detalhes.txt com todos os processos
 function gerarTxt(estado, numero, processos, nomeAdvogado) {
   const linhas = [];
-  linhas.push(`${'='.repeat(60)}`);
+  linhas.push('='.repeat(60));
   linhas.push(`OAB: ${estado}${numero}`);
   if (nomeAdvogado) linhas.push(`ADVOGADO: ${nomeAdvogado}`);
   linhas.push(`TOTAL DE PROCESSOS: ${processos.length}`);
-  linhas.push(`GERADO EM: ${new Date().toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'})}`);
-  linhas.push(`${'='.repeat(60)}`);
+  linhas.push(`GERADO EM: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+  linhas.push('='.repeat(60));
   linhas.push('');
 
   processos.forEach((p, i) => {
-    const num    = p.numero || p.numeroProcesso || 'N/D';
-    const link   = linkProcesso(num);
+    const num = p.numero || p.numeroProcesso || 'N/D';
     linhas.push(`PROCESSO ${i + 1}: ${num}`);
-    linhas.push(`LINK: ${link}`);
+    linhas.push(`LINK: ${linkProcesso(num)}`);
     linhas.push(`TRIBUNAL: ${p.tribunal || 'N/D'}`);
     linhas.push(`CLASSE: ${p.classe || 'N/D'}`);
     linhas.push(`ASSUNTO: ${p.assunto || 'N/D'}`);
-    linhas.push(`VALOR: ${formatarValor(p.valor)}`);
     linhas.push(`DATA INÍCIO: ${formatarData(p.data || p.dataAjuizamento)}`);
-    linhas.push(`ÚLTIMA MOVIMENTAÇÃO: ${formatarData(p.ultimaMovimentacao)}`);
     linhas.push(`ÓRGÃO JULGADOR: ${p.orgao || 'N/D'}`);
-
-    const ativos = p.partes?.filter(x => x.polo === 'ativo' || x.tipo === 'Autor') || [];
-    if (ativos.length > 0) {
-      linhas.push('POLO ATIVO:');
-      ativos.forEach(parte => {
-        linhas.push(`  - ${parte.nome || parte}${parte.cpf ? ` | CPF: ${parte.cpf}` : ''}${parte.telefone ? ` | TEL: ${parte.telefone}` : ''}`);
-        if (parte.advogados?.length > 0) {
-          parte.advogados.forEach(adv => linhas.push(`    Advogado: ${adv.nome || adv}${adv.cpf ? ` | CPF: ${adv.cpf}` : ''}`));
-        }
-      });
-    }
-
-    const passivos = p.partes?.filter(x => x.polo === 'passivo' || x.tipo === 'Réu') || [];
-    if (passivos.length > 0) {
-      linhas.push('POLO PASSIVO:');
-      passivos.forEach(parte => {
-        linhas.push(`  - ${parte.nome || parte}${parte.cpf ? ` | CPF: ${parte.cpf}` : ''}${parte.cnpj ? ` | CNPJ: ${parte.cnpj}` : ''}${parte.telefone ? ` | TEL: ${parte.telefone}` : ''}`);
-      });
-    }
-
     linhas.push('-'.repeat(60));
     linhas.push('');
   });
@@ -181,47 +105,39 @@ function gerarTxt(estado, numero, processos, nomeAdvogado) {
   return linhas.join('\n');
 }
 
-// ─── Handler principal ───────────────────────────────────────────────────────
+// ─── Busca e entrega ─────────────────────────────────────────────────────────
 
 async function processarOAB(chatId, estado, numero) {
+  // 1. Avisar que está buscando
   await enviarMensagem(chatId, `⏳ *Buscando processos...*`);
 
-  // Acordar o Render (free tier dorme após inatividade)
+  // 2. Chamar nossa API (mesma chamada que funcionava antes)
+  let dados;
   try {
-    await fetch(`${NOSSA_API.replace('/api/v1','')}/health`, { method: 'GET' });
-  } catch(e) { /* ignorar */ }
-
-  let dados, processos = [], nomeAdvogado = null;
-
-  // Tentar até 3 vezes (Render pode demorar para acordar)
-  for (let tentativa = 1; tentativa <= 3; tentativa++) {
-    try {
-      const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': NOSSA_CHAVE },
-        body: JSON.stringify({ estado, numero }),
-      });
-      dados = await resp.json();
-      processos = dados.dados?.processos || [];
-      if (processos.length > 0) break; // achou, sair do loop
-      if (tentativa < 3) await new Promise(r => setTimeout(r, 3000)); // esperar 3s e tentar de novo
-    } catch (e) {
-      if (tentativa === 3) {
-        await enviarMensagem(chatId, `❌ Erro ao consultar a API: ${e.message}`);
-        return;
-      }
-      await new Promise(r => setTimeout(r, 3000));
-    }
-  }
-
-  if (!dados || !dados.sucesso) {
-    await enviarMensagem(chatId, `❌ ${dados.mensagem || 'Erro na consulta'}`);
+    const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': NOSSA_CHAVE,
+      },
+      body: JSON.stringify({ estado, numero }),
+    });
+    dados = await resp.json();
+  } catch (e) {
+    await enviarMensagem(chatId, `❌ Erro ao consultar a API: ${e.message}`);
     return;
   }
 
-  nomeAdvogado  = dados.dados?.advogado?.nome || null;
-  const total   = dados.dados?.total_processos || processos.length;
+  if (!dados.sucesso) {
+    await enviarMensagem(chatId, `❌ ${dados.mensagem || 'Falha na consulta'}`);
+    return;
+  }
 
+  const adv       = dados.dados?.advogado;
+  const processos = dados.dados?.processos || [];
+  const total     = dados.dados?.total_processos || processos.length;
+
+  // 3. Confirmar quantidade encontrada
   await enviarMensagem(chatId, `✅ *Encontrados ${total} processos*`);
 
   if (total === 0) {
@@ -229,36 +145,30 @@ async function processarOAB(chatId, estado, numero) {
     return;
   }
 
-  // ── 1. Gerar e enviar arquivo detalhes.txt ──────────────────────────────
+  // 4. Gerar e enviar arquivo detalhes.txt
   await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.txt...*`);
+  const nomeArq  = `temp_${estado}${numero}_detalhes.txt`;
+  const conteudo = gerarTxt(estado, numero, processos, adv?.nome);
+  const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
+  await enviarArquivo(chatId, nomeArq, conteudo,
+    `📄 ${nomeArq}\n${kb} KB\n✅ Arquivo detalhes.txt gerado\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
+  );
 
-  const nomeArq   = `temp_${estado}${numero}_detalhes.txt`;
-  const conteudo  = gerarTxt(estado, numero, processos, nomeAdvogado);
-  const legendaTxt =
-    `📄 *${nomeArq}*\n` +
-    `${(Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1)} KB\n` +
-    `✅ Arquivo detalhes.txt gerado\n` +
-    `OAB: ${estado}${numero}\n` +
-    `📊 Processos: ${total}\n` +
-    `📞 Telefones incluídos nos detalhes`;
-
-  await enviarArquivo(chatId, nomeArq, conteudo, legendaTxt);
-
-  // ── 2. Enviar processos individualmente (máx 20 para não sobrecarregar) ─
+  // 5. Enviar processos individualmente em cards (máx 20)
   const limite = Math.min(processos.length, 20);
   for (let i = 0; i < limite; i++) {
-    const card = cardProcesso(processos[i], i + 1);
-    await enviarMensagem(chatId, card);
-    // Pequena pausa para não ser bloqueado pelo Telegram (rate limit)
+    await enviarMensagem(chatId, cardProcesso(processos[i], i + 1));
     if (i < limite - 1) await new Promise(r => setTimeout(r, 300));
   }
 
   if (total > 20) {
     await enviarMensagem(chatId,
-      `📋 _Mostrando 20 de ${total} processos. O arquivo detalhes.txt contém todos._`
+      `📋 _Mostrando 20 de ${total} processos. Todos estão no arquivo detalhes.txt._`
     );
   }
 }
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
 
 exports.handler = async (event) => {
   try {
@@ -284,6 +194,7 @@ exports.handler = async (event) => {
         `*/oab UF NUMERO* — busca processos do advogado\n\n` +
         `Exemplo: /oab MS 3616`
       );
+
     } else if (texto.startsWith('/')) {
       await enviarMensagem(chatId, `❓ Comando não reconhecido. Use /ajuda.`);
     }
