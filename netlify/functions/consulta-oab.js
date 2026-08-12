@@ -55,8 +55,8 @@ ${conteudo}
 
 const buscarUmaVez = async (fn, nome, args, chatId) => {
   try {
-    console.log(`í´ ${nome} â€” iniciando`);
-    await avisarTelegram(chatId, `í´ Buscando no ${nome}...`);
+    console.log(`ï¿½ï¿½ï¿½ ${nome} â€” iniciando`);
+    await avisarTelegram(chatId, `ï¿½ï¿½ï¿½ Buscando no ${nome}...`);
     const res = await Promise.race([
       fn(...args),
       new Promise((_, r) => setTimeout(r, CONFIG.TIMEOUT[nome], []))
@@ -77,16 +77,26 @@ const processarRapido = async (id, oab, uf, numero, chatId) => {
     const add = p => p?.numero && !unicos.has(p.numero) && unicos.set(p.numero, p);
 
     // âœ… ORDEM EXATA: DATAJUD PRIMEIRO â†’ CHAMA APENAS COM A OAB (COMO ELES ESPERAM)
+    // Normaliza resultado de qualquer fonte para o formato padrÃ£o { numero, tribunal, classe, assunto, data }
+    const normalizar = (lista, nomeFonte) => lista.map(p => ({
+      numero:   p.numero   || p.numero_cnj || p.numeroProcesso || '',
+      tribunal: p.tribunal || nomeFonte,
+      classe:   p.classe   || p.fontes?.[0]?.capa?.classe || '',
+      assunto:  p.assunto  || p.fontes?.[0]?.capa?.assunto || '',
+      data:     p.data     || ''
+    }));
+
     const fontes = [
-      {fn: datajud, nome: "í³Š DataJud (Brasil)", args: [oab]},
-      {fn: tjsp, nome: "âš–ï¸ TJSP", args: [oab]},
-      {fn: tjms, nome: "âš–ï¸ TJMS", args: [oab]},
-      {fn: tjmg, nome: "âš–ï¸ TJMG", args: [oab]}
+      {fn: datajud, nome: "DataJud (Brasil)", args: [oab]},
+      {fn: tjsp,    nome: "TJSP",             args: [oab]},
+      {fn: tjms,    nome: "TJMS",             args: [oab]},
+      {fn: tjmg,    nome: "TJMG",             args: [oab]}
     ];
 
     for (const fonte of fontes) {
       if (unicos.size >= CONFIG.MAX_TOTAL) break;
-      const dados = await buscarUmaVez(fonte.fn, fonte.nome, fonte.args, chatId);
+      const raw = await buscarUmaVez(fonte.fn, fonte.nome, fonte.args, chatId);
+      const dados = normalizar(raw, fonte.nome);
       dados.slice(0, CONFIG.LIMITE_POR_FONTE).forEach(add);
       await banco.atualizarConsulta(id, { total: unicos.size });
       await new Promise(r => setTimeout(r, 1200));
@@ -98,7 +108,7 @@ const processarRapido = async (id, oab, uf, numero, chatId) => {
     ).join('\n');
 
     await banco.atualizarConsulta(id, { status: "CONCLUÃDA", processos: lista, txt });
-    await avisarTelegram(chatId, `í¿ **FINALIZADO!**\nTotal geral: ${lista.length} processos`);
+    await avisarTelegram(chatId, `ï¿½ï¿½ï¿½ **FINALIZADO!**\nTotal geral: ${lista.length} processos`);
     await enviarArquivoFinal(chatId, `consulta-${oab}.txt`, txt);
 
   } catch (erro) {
@@ -132,7 +142,7 @@ exports.handler = async ev => {
     })};
   }
 
-  await avisarTelegram(chatId, `í´ **INICIANDO CONSULTA PARA OAB ${oabLimpa}**\nOrdem: DataJud â†’ TJSP â†’ TJMS â†’ TJMG`);
+  await avisarTelegram(chatId, `ï¿½ï¿½ï¿½ **INICIANDO CONSULTA PARA OAB ${oabLimpa}**\nOrdem: DataJud â†’ TJSP â†’ TJMS â†’ TJMG`);
   processarRapido(res.id, oabLimpa, uf, numero, chatId).catch(e=>console.log(`Erro ${res.id}: ${e.message}`));
 
   return {statusCode:202, body:JSON.stringify({id:res.id, status:"PROCESSANDO"})};

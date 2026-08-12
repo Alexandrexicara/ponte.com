@@ -4,7 +4,9 @@ const CHAVE_API = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
 const TRIBUNAIS = { tjms: "api_publica_tjms", tjsp: "api_publica_tjsp", tjmg: "api_publica_tjmg" };
 const esperar = ms => new Promise(r => setTimeout(r, ms));
 
-module.exports = async ({ numeroOAB }) => {
+module.exports = async (oabInput) => {
+  // Aceita tanto string "MS3616" quanto objeto { numeroOAB: "MS3616" }
+  const numeroOAB = (typeof oabInput === 'string') ? oabInput : oabInput?.numeroOAB;
   if (!numeroOAB) return [];
   const resultados = [];
   const MAX_POR_TRIBUNAL = 70; // Total não passa de 200 somado
