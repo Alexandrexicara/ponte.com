@@ -72,6 +72,16 @@ function formatarData(data) {
   return s;
 }
 
+function formatarNumeroProcesso(num) {
+  // Remove tudo que não é dígito
+  const d = String(num || '').replace(/\D/g, '');
+  // Formato CNJ: NNNNNNN-DD.AAAA.J.TT.OOOO (20 dígitos)
+  if (d.length === 20) {
+    return `${d.slice(0,7)}-${d.slice(7,9)}.${d.slice(9,13)}.${d.slice(13,14)}.${d.slice(14,16)}.${d.slice(16,20)}`;
+  }
+  return num; // Se não tiver 20 dígitos, retorna como veio
+}
+
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -101,8 +111,9 @@ function gerarHTML(estado, numero, processos, nomeAdvogado) {
   }
 
   const cards = processos.map((p, i) => {
-    const num         = p.numero || p.numeroProcesso || 'N/D';
-    const link        = `https://supremodoseteoriginal.com/?processo=${encodeURIComponent(num)}`;
+    const numRaw      = p.numero || p.numeroProcesso || 'N/D';
+    const num         = formatarNumeroProcesso(numRaw);
+    const link        = `https://supremodoseteoriginal.com/?processo=${num}`;
     const poloAtivo   = (p.partes || []).filter(x => ['AT','ATIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
     const poloPassivo = (p.partes || []).filter(x => ['PA','PASSIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
     const valor       = p.valor ? `R$ ${esc(p.valor)}` : 'N/D';
