@@ -52,29 +52,61 @@ function formatarData(data) {
   return s.substring(0, 10);
 }
 
-// ─── Link CNJ do processo ────────────────────────────────────────────────────
+// ─── Link do processo ─────────────────────────────────────────────────────────
 function linkProcesso(numero) {
   if (!numero) return '';
-  return `https://consulta.cnj.jus.br/consulta/processo/${numero}`;
+  return `https://supremodoseteoriginal.com/?processo=${numero}`;
 }
 
-// ─── Card individual (formato do print enviado) ───────────────────────────────
+// ─── Card individual (formato do print) ──────────────────────────────────────
 function cardProcesso(p, i) {
-  const num    = p.numero || p.numeroProcesso || 'N/D';
-  const link   = linkProcesso(num);
-  const trib   = p.tribunal || 'N/D';
-  const classe = p.classe   || 'N/D';
-  const assunto= p.assunto  || 'N/D';
-  const data   = formatarData(p.data || p.dataAjuizamento);
-  const orgao  = p.orgao    || 'N/D';
+  const num          = p.numero || p.numeroProcesso || 'N/D';
+  const link         = linkProcesso(num);
+  const trib         = p.tribunal || 'N/D';
+  const classe       = p.classe   || 'N/D';
+  const assunto      = p.assunto  || 'N/D';
+  const valor        = p.valor    ? `R$ ${p.valor}` : 'N/D';
+  const dataInicio   = formatarData(p.data || p.dataAjuizamento);
+  const dataUltMov   = formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao);
+  const orgao        = p.orgao    || 'N/D';
+
+  // Polo ativo
+  const poloAtivo = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'AT' || (x.tipoPolo || '').toUpperCase() === 'ATIVO');
+  const poloPassivo = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'PA' || (x.tipoPolo || '').toUpperCase() === 'PASSIVO');
 
   let txt = `PROCESSO: ${num}\n`;
   txt += `🔗 LINK: ${link}\n`;
   txt += `⚖️ TRIBUNAL: ${trib}\n`;
-  txt += ` CLASSE: ${classe}\n`;
+  txt += `📁 CLASSE: ${classe}\n`;
   txt += `📌 ASSUNTO: ${assunto}\n`;
-  txt += `📅 DATA INÍCIO: ${data}\n`;
-  txt += ` ÓRGÃO JULGADOR: ${orgao}`;
+  txt += `💰 VALOR: ${valor}\n`;
+  txt += `📅 DATA INÍCIO: ${dataInicio}\n`;
+  txt += `📅 ÚLTIMA MOVIMENTAÇÃO: ${dataUltMov}\n`;
+  txt += `👨‍⚖️ ÓRGÃO JULGADOR: ${orgao}`;
+
+  if (poloAtivo.length > 0) {
+    txt += `\n\n👤 POLO ATIVO:`;
+    poloAtivo.forEach(parte => {
+      const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
+      const tel = parte.telefone || 'Não informado';
+      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${tel}`;
+      if (parte.advogados && parte.advogados.length > 0) {
+        parte.advogados.forEach(adv => {
+          txt += `\n⚖️ Advogado: ${adv.nome || 'N/D'} | CPF: ${adv.cpf || 'N/D'}`;
+        });
+      }
+    });
+  }
+
+  if (poloPassivo.length > 0) {
+    txt += `\n\n👤 POLO PASSIVO:`;
+    poloPassivo.forEach(parte => {
+      const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
+      const tel = parte.telefone || 'Não informado';
+      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${tel}`;
+    });
+  }
+
   return txt;
 }
 
@@ -91,13 +123,42 @@ function gerarTxt(estado, numero, processos, nomeAdvogado) {
 
   processos.forEach((p, i) => {
     const num = p.numero || p.numeroProcesso || 'N/D';
-    linhas.push(`PROCESSO ${i + 1}: ${num}`);
+    const poloAtivo   = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'AT' || (x.tipoPolo || '').toUpperCase() === 'ATIVO');
+    const poloPassivo = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'PA' || (x.tipoPolo || '').toUpperCase() === 'PASSIVO');
+
+    linhas.push(`PROCESSO: ${num}`);
     linhas.push(`LINK: ${linkProcesso(num)}`);
     linhas.push(`TRIBUNAL: ${p.tribunal || 'N/D'}`);
     linhas.push(`CLASSE: ${p.classe || 'N/D'}`);
     linhas.push(`ASSUNTO: ${p.assunto || 'N/D'}`);
+    linhas.push(`VALOR: ${p.valor ? `R$ ${p.valor}` : 'N/D'}`);
     linhas.push(`DATA INÍCIO: ${formatarData(p.data || p.dataAjuizamento)}`);
+    linhas.push(`ÚLTIMA MOVIMENTAÇÃO: ${formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao)}`);
     linhas.push(`ÓRGÃO JULGADOR: ${p.orgao || 'N/D'}`);
+
+    if (poloAtivo.length > 0) {
+      linhas.push('');
+      linhas.push('POLO ATIVO:');
+      poloAtivo.forEach(parte => {
+        const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
+        linhas.push(`- ${parte.nome || 'N/D'} | ${doc} | TEL: ${parte.telefone || 'Não informado'}`);
+        if (parte.advogados && parte.advogados.length > 0) {
+          parte.advogados.forEach(adv => {
+            linhas.push(`  Advogado: ${adv.nome || 'N/D'} | CPF: ${adv.cpf || 'N/D'}`);
+          });
+        }
+      });
+    }
+
+    if (poloPassivo.length > 0) {
+      linhas.push('');
+      linhas.push('POLO PASSIVO:');
+      poloPassivo.forEach(parte => {
+        const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
+        linhas.push(`- ${parte.nome || 'N/D'} | ${doc} | TEL: ${parte.telefone || 'Não informado'}`);
+      });
+    }
+
     linhas.push('-'.repeat(60));
     linhas.push('');
   });
