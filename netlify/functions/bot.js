@@ -160,9 +160,14 @@ ${cards}
 </html>`;
 }
 
-// ─── Busca OAB — UMA chamada só, sem retry ────────────────────────────────────
+// ─── Busca OAB — acorda Render se necessário, uma chamada ────────────────────
 async function processarOAB(chatId, estado, numero) {
   await enviarMensagem(chatId, `🔍 Buscando OAB *${estado} ${numero}*...`);
+
+  // Ping no /health para acordar o Render (não bloqueia a busca se já estiver acordado)
+  try {
+    await fetch(`https://busca-processos.onrender.com/health`, { method: 'GET' });
+  } catch (_) {}
 
   try {
     const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
