@@ -1,7 +1,16 @@
 const fetch = require('node-fetch');
 
-const TELEGRAM_TOKEN = '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM';
-const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
+const TELEGRAM_TOKENS = [
+  '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM',
+  '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo'
+];
+let botIndex = 0;
+
+function getToken() {
+  const token = TELEGRAM_TOKENS[botIndex];
+  botIndex = (botIndex + 1) % TELEGRAM_TOKENS.length;
+  return token;
+}
 const NOSSA_API      = 'https://busca-processos.onrender.com/api/v1';
 const NOSSA_CHAVE    = 'busca-processos-dev-key-2024';
 
@@ -10,7 +19,7 @@ const { limparOAB, separarOAB } = require('../utils/validar');
 // ─── Enviar mensagem de texto ─────────────────────────────────────────────────
 async function enviarMensagem(chatId, texto) {
   try {
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${getToken()}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown' }),
@@ -36,7 +45,7 @@ async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
       fileBuffer,
       Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8'),
     ]);
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
+    await fetch(`https://api.telegram.org/bot${getToken()}/sendDocument`, {
       method: 'POST',
       headers: {
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
