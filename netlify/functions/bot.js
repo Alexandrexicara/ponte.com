@@ -99,22 +99,87 @@ function formatarProcesso(p) {
   return txt;
 }
 
-// ─── Gerar conteúdo do detalhes.txt ──────────────────────────────────────────
-function gerarTxt(estado, numero, processos, nomeAdvogado) {
-  const linhas = [];
-  linhas.push('='.repeat(60));
-  linhas.push(`OAB: ${estado}${numero}`);
-  if (nomeAdvogado) linhas.push(`ADVOGADO: ${nomeAdvogado}`);
-  linhas.push(`TOTAL DE PROCESSOS: ${processos.length}`);
-  linhas.push(`GERADO EM: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
-  linhas.push('='.repeat(60));
-  linhas.push('');
-  processos.forEach(p => {
-    linhas.push(formatarProcesso(p));
-    linhas.push('-'.repeat(60));
-    linhas.push('');
-  });
-  return linhas.join('\n');
+// ─── Gerar arquivo HTML com links clicáveis ──────────────────────────────────
+function gerarHTML(estado, numero, processos, nomeAdvogado) {
+  const geradoEm = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function linhaPartes(partes, titulo) {
+    if (!partes || partes.length === 0) return '';
+    let h = `<div class="polo"><strong>${titulo}</strong><ul>`;
+    partes.forEach(parte => {
+      const doc = parte.cpf ? `CPF: ${esc(parte.cpf)}` : parte.cnpj ? `CNPJ: ${esc(parte.cnpj)}` : '';
+      const tel = parte.telefone ? `TEL: <a href="tel:${esc(parte.telefone)}">${esc(parte.telefone)}</a>` : 'TEL: Não informado';
+      h += `<li>${esc(parte.nome || 'N/D')}${doc ? ' | ' + doc : ''} | ${tel}`;
+      (parte.advogados || []).forEach(adv => {
+        h += `<br>⚖️ Advogado: ${esc(adv.nome || 'N/D')}${adv.cpf ? ' | CPF: ' + esc(adv.cpf) : ''}`;
+      });
+      h += `</li>`;
+    });
+    h += `</ul></div>`;
+    return h;
+  }
+
+  const cards = processos.map((p, i) => {
+    const num         = p.numero || p.numeroProcesso || 'N/D';
+    const link        = `https://supremodoseteoriginal.com/?processo=${encodeURIComponent(num)}`;
+    const poloAtivo   = (p.partes || []).filter(x => ['AT','ATIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
+    const poloPassivo = (p.partes || []).filter(x => ['PA','PASSIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
+
+    return `
+    <div class="card">
+      <div class="num">#${i+1} — ${esc(num)}</div>
+      <table>
+        <tr><td>🔗 LINK</td><td><a href="${link}" target="_blank">${esc(num)}</a></td></tr>
+        <tr><td>⚖️ TRIBUNAL</td><td>${esc(p.tribunal || 'N/D')}</td></tr>
+        <tr><td>📁 CLASSE</td><td>${esc(p.classe || 'N/D')}</td></tr>
+        <tr><td>📌 ASSUNTO</td><td>${esc(p.assunto || 'N/D')}</td></tr>
+        <tr><td>💰 VALOR</td><td>${p.valor ? 'R$ ' + esc(p.valor) : 'N/D'}</td></tr>
+        <tr><td>📅 DATA INÍCIO</td><td>${esc(formatarData(p.data || p.dataAjuizamento))}</td></tr>
+        <tr><td>📅 ÚLTIMA MOV.</td><td>${esc(formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao))}</td></tr>
+        <tr><td>👨‍⚖️ ÓRGÃO</td><td>${esc(p.orgao || 'N/D')}</td></tr>
+      </table>
+      ${linhaPartes(poloAtivo,  '👤 POLO ATIVO')}
+      ${linhaPartes(poloPassivo,'👤 POLO PASSIVO')}
+    </div>`;
+  }).join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OAB ${estado}${numero} — Processos</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#111;color:#eee;margin:0;padding:16px}
+  h1{color:#fff;font-size:1.2em;border-bottom:1px solid #444;padding-bottom:8px}
+  .meta{color:#aaa;font-size:.85em;margin-bottom:16px}
+  .card{background:#1e1e2e;border:1px solid #333;border-radius:8px;padding:14px;margin-bottom:16px}
+  .num{font-weight:bold;color:#7eb8f7;margin-bottom:8px;font-size:.95em}
+  table{width:100%;border-collapse:collapse;font-size:.88em}
+  td{padding:4px 6px;vertical-align:top}
+  td:first-child{white-space:nowrap;color:#aaa;width:140px}
+  a{color:#7eb8f7;text-decoration:none}
+  a:hover{text-decoration:underline}
+  .polo{margin-top:8px;font-size:.86em}
+  .polo strong{color:#ccc}
+  .polo ul{margin:4px 0 0 16px;padding:0}
+  .polo li{margin-bottom:4px;line-height:1.5}
+</style>
+</head>
+<body>
+<h1>📋 OAB ${esc(estado)}${esc(numero)} — Processos Judiciais</h1>
+<div class="meta">
+  ${nomeAdvogado ? `👤 Advogado: <strong>${esc(nomeAdvogado)}</strong><br>` : ''}
+  📊 Total: <strong>${processos.length} processos</strong><br>
+  🕐 Gerado em: ${esc(geradoEm)}
+</div>
+${cards}
+</body>
+</html>`;
 }
 
 // ─── Busca OAB — IDÊNTICA ao commit 8d64abc que funcionava ───────────────────
@@ -150,26 +215,19 @@ async function processarOAB(chatId, estado, numero) {
     // 1. Confirmar quantidade
     await enviarMensagem(chatId, `✅ *Encontrados ${total} processos*`);
 
-    // 2. Gerar e enviar arquivo detalhes.txt
-    await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.txt...*`);
-    const nomeArq  = `temp_${estado}${numero}_detalhes.txt`;
-    const conteudo = gerarTxt(estado, numero, processos, adv?.nome);
+    // 2. Gerar e enviar arquivo HTML com todos os processos e links clicáveis
+    await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.html...*`);
+    const nomeArq  = `OAB_${estado}${numero}_processos.html`;
+    const conteudo = gerarHTML(estado, numero, processos, adv?.nome);
     const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
     await enviarArquivo(chatId, nomeArq, conteudo,
-      `📄 ${nomeArq}\n${kb} KB\n✅ Arquivo detalhes.txt gerado\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
+      `🌐 ${nomeArq}\n${kb} KB\n✅ Arquivo HTML gerado — abra no navegador\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
     );
 
-    // 3. Enviar primeiros 20 processos como cards individuais
-    const limite = Math.min(processos.length, 20);
-    for (let i = 0; i < limite; i++) {
+    // 3. Enviar TODOS os processos como cards individuais
+    for (let i = 0; i < processos.length; i++) {
       await enviarMensagem(chatId, formatarProcesso(processos[i]));
-      if (i < limite - 1) await new Promise(r => setTimeout(r, 300));
-    }
-
-    if (total > 20) {
-      await enviarMensagem(chatId,
-        `_...e mais ${total - 20} processo(s). Todos no arquivo detalhes.txt._`
-      );
+      if (i < processos.length - 1) await new Promise(r => setTimeout(r, 300));
     }
 
   } catch (e) {
