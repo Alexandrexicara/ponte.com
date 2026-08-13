@@ -156,12 +156,26 @@ ${cards}
 </html>`;
 }
 
+// ─── Acorda o Render e espera estar pronto ────────────────────────────────────
+async function acordarRender() {
+  const BASE = 'https://busca-processos.onrender.com';
+  // Tenta até 4 vezes com 4s de intervalo (total ~16s de espera máxima)
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await fetch(`${BASE}/health`, { method: 'GET' });
+      if (r.ok) return true; // Render acordado
+    } catch (_) {}
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  return false;
+}
+
 // ─── Busca e entrega ──────────────────────────────────────────────────────────
 async function processarOAB(token, chatId, estado, numero) {
   await enviarMensagem(token, chatId, `🔍 Buscando OAB *${estado} ${numero}*...`);
 
   // Acorda o Render antes de buscar
-  try { await fetch('https://busca-processos.onrender.com/health'); } catch (_) {}
+  await acordarRender();
 
   try {
     const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
