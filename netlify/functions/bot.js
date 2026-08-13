@@ -170,13 +170,13 @@ ${cards}
 // ─── Acorda o Render e espera estar pronto ────────────────────────────────────
 async function acordarRender() {
   const BASE = 'https://busca-processos.onrender.com';
-  // Tenta até 4 vezes com 4s de intervalo (total ~16s de espera máxima)
-  for (let i = 0; i < 4; i++) {
+  // Tenta até 2 vezes com 3s de intervalo
+  for (let i = 0; i < 2; i++) {
     try {
       const r = await fetch(`${BASE}/health`, { method: 'GET' });
-      if (r.ok) return true; // Render acordado
+      if (r.ok) return true;
     } catch (_) {}
-    await new Promise(r => setTimeout(r, 4000));
+    await new Promise(r => setTimeout(r, 3000));
   }
   return false;
 }
@@ -232,10 +232,7 @@ async function processarOAB(token, chatId, estado, numero) {
 const processados = new Set();
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
-exports.handler = async (event, context) => {
-  // Não esperar event loop para retornar OK imediatamente ao Telegram
-  context.callbackWaitsForEmptyEventLoop = false;
-
+exports.handler = async (event) => {
   try {
     const token    = resolverToken(event);
     const body     = JSON.parse(event.body || '{}');
@@ -251,28 +248,26 @@ exports.handler = async (event, context) => {
       return { statusCode: 200, body: 'OK' };
     }
     if (updateId) processados.add(updateId);
-    // Limpar cache após 500 updates para não crescer infinito
     if (processados.size > 500) processados.clear();
 
     if (/^\/oab\s+/i.test(texto)) {
       const arg   = texto.replace(/^\/oab\s+/i, '').trim();
       const match = arg.match(/^([A-Za-z]{2})\s*(\d+)$/);
       if (!match) {
-        enviarMensagem(token, chatId, `❌ Formato inválido.\nUse: /oab UF NUMERO\nExemplo: /oab MS 3616`);
+        await enviarMensagem(token, chatId, `❌ Formato inválido.\nUse: /oab UF NUMERO\nExemplo: /oab MS 3616`);
       } else {
-        // Dispara em background — retorna OK imediatamente sem esperar
-        processarOAB(token, chatId, match[1].toUpperCase(), match[2]);
+        await processarOAB(token, chatId, match[1].toUpperCase(), match[2]);
       }
 
     } else if (/^\/(start|help|ajuda)$/i.test(texto)) {
-      enviarMensagem(token, chatId,
+      await enviarMensagem(token, chatId,
         `👋 *Bot de Processos Judiciais*\n\n` +
         `*/oab UF NUMERO* — busca processos do advogado\n\n` +
         `Exemplo: /oab MS 3616`
       );
 
     } else if (texto.startsWith('/')) {
-      enviarMensagem(token, chatId, `❓ Comando não reconhecido. Use /ajuda.`);
+      await enviarMensagem(token, chatId, `❓ Comando não reconhecido. Use /ajuda.`);
     }
 
     return { statusCode: 200, body: 'OK' };
