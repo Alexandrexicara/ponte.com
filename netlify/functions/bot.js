@@ -228,35 +228,51 @@ async function processarOAB(token, chatId, estado, numero) {
   }
 }
 
+// ─── Controle de updates já processados (evita duplicatas do Telegram) ────────
+const processados = new Set();
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
-exports.handler = async (event) => {
+exports.handler = async (event, context) => {
+  // Não esperar event loop para retornar OK imediatamente ao Telegram
+  context.callbackWaitsForEmptyEventLoop = false;
+
   try {
     const token    = resolverToken(event);
     const body     = JSON.parse(event.body || '{}');
+    const updateId = body.update_id;
     const mensagem = body.message || {};
     const chatId   = mensagem.chat?.id;
     const texto    = (mensagem.text || '').trim();
 
     if (!chatId) return { statusCode: 200, body: 'OK' };
 
+    // Ignorar updates duplicados (Telegram reenvia se não receber 200 a tempo)
+    if (updateId && processados.has(updateId)) {
+      return { statusCode: 200, body: 'OK' };
+    }
+    if (updateId) processados.add(updateId);
+    // Limpar cache após 500 updates para não crescer infinito
+    if (processados.size > 500) processados.clear();
+
     if (/^\/oab\s+/i.test(texto)) {
       const arg   = texto.replace(/^\/oab\s+/i, '').trim();
       const match = arg.match(/^([A-Za-z]{2})\s*(\d+)$/);
       if (!match) {
-        await enviarMensagem(token, chatId, `❌ Formato inválido.\nUse: /oab UF NUMERO\nExemplo: /oab MS 3616`);
+        enviarMensagem(token, chatId, `❌ Formato inválido.\nUse: /oab UF NUMERO\nExemplo: /oab MS 3616`);
       } else {
-        await processarOAB(token, chatId, match[1].toUpperCase(), match[2]);
+        // Dispara em background — retorna OK imediatamente sem esperar
+        processarOAB(token, chatId, match[1].toUpperCase(), match[2]);
       }
 
     } else if (/^\/(start|help|ajuda)$/i.test(texto)) {
-      await enviarMensagem(token, chatId,
+      enviarMensagem(token, chatId,
         `👋 *Bot de Processos Judiciais*\n\n` +
         `*/oab UF NUMERO* — busca processos do advogado\n\n` +
         `Exemplo: /oab MS 3616`
       );
 
     } else if (texto.startsWith('/')) {
-      await enviarMensagem(token, chatId, `❓ Comando não reconhecido. Use /ajuda.`);
+      enviarMensagem(token, chatId, `❓ Comando não reconhecido. Use /ajuda.`);
     }
 
     return { statusCode: 200, body: 'OK' };
