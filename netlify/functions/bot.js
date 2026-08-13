@@ -24,20 +24,41 @@ async function enviarMensagem(chatId, texto) {
   }
 }
 
-// ─── Enviar arquivo .txt ─────────────────────────────────────────────────────
+// ─── Enviar arquivo .txt (multipart manual, compatível com node-fetch v2) ────
 async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
   try {
-    const { FormData, Blob } = require('node-fetch');
-    const form = new FormData();
-    form.append('chat_id', String(chatId));
-    form.append('document',
-      new Blob([conteudo], { type: 'text/plain; charset=utf-8' }),
-      nomeArquivo
+    const boundary = `----FormBoundary${Date.now()}`;
+    const fileBuffer = Buffer.from(conteudo, 'utf8');
+
+    const partes = [];
+
+    // campo chat_id
+    partes.push(
+      `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}`
     );
-    form.append('caption', legenda);
+
+    // campo caption
+    partes.push(
+      `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${legenda}`
+    );
+
+    // cabeçalho do arquivo
+    const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${nomeArquivo}"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n`;
+
+    const body = Buffer.concat([
+      Buffer.from(partes.join('\r\n') + '\r\n', 'utf8'),
+      Buffer.from(fileHeader, 'utf8'),
+      fileBuffer,
+      Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8'),
+    ]);
+
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
       method: 'POST',
-      body: form,
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': body.length,
+      },
+      body,
     });
   } catch (e) {
     console.error('enviarArquivo:', e.message);
