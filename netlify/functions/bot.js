@@ -1,5 +1,6 @@
 const fetch = require('node-fetch');
 
+const TELEGRAM_TOKEN = '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM';
 const TELEGRAM_TOKEN = '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo';
 const NOSSA_API      = 'https://busca-processos.onrender.com/api/v1';
 const NOSSA_CHAVE    = 'busca-processos-dev-key-2024';
