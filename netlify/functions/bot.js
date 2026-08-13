@@ -24,25 +24,17 @@ async function enviarMensagem(chatId, texto) {
   }
 }
 
-// ─── Enviar arquivo .txt (multipart manual, compatível com node-fetch v2) ────
+// ─── Enviar arquivo .txt (multipart manual, node-fetch v2) ───────────────────
 async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
   try {
-    const boundary = `----FormBoundary${Date.now()}`;
+    const boundary  = `----FormBoundary${Date.now()}`;
     const fileBuffer = Buffer.from(conteudo, 'utf8');
 
-    const partes = [];
+    const partes = [
+      `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${legenda}`,
+    ];
 
-    // campo chat_id
-    partes.push(
-      `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}`
-    );
-
-    // campo caption
-    partes.push(
-      `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${legenda}`
-    );
-
-    // cabeçalho do arquivo
     const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${nomeArquivo}"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n`;
 
     const body = Buffer.concat([
@@ -65,7 +57,7 @@ async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
   }
 }
 
-// ─── Formatar data ────────────────────────────────────────────────────────────
+// ─── Helpers de formatação ────────────────────────────────────────────────────
 function formatarData(data) {
   if (!data) return 'N/D';
   const s = String(data);
@@ -73,30 +65,26 @@ function formatarData(data) {
   return s.substring(0, 10);
 }
 
-// ─── Link do processo ─────────────────────────────────────────────────────────
 function linkProcesso(numero) {
   if (!numero) return '';
   return `https://supremodoseteoriginal.com/?processo=${numero}`;
 }
 
 // ─── Card individual (formato do print) ──────────────────────────────────────
-function cardProcesso(p, i) {
-  const num          = p.numero || p.numeroProcesso || 'N/D';
-  const link         = linkProcesso(num);
-  const trib         = p.tribunal || 'N/D';
-  const classe       = p.classe   || 'N/D';
-  const assunto      = p.assunto  || 'N/D';
-  const valor        = p.valor    ? `R$ ${p.valor}` : 'N/D';
-  const dataInicio   = formatarData(p.data || p.dataAjuizamento);
-  const dataUltMov   = formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao);
-  const orgao        = p.orgao    || 'N/D';
-
-  // Polo ativo
-  const poloAtivo = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'AT' || (x.tipoPolo || '').toUpperCase() === 'ATIVO');
-  const poloPassivo = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'PA' || (x.tipoPolo || '').toUpperCase() === 'PASSIVO');
+function cardProcesso(p) {
+  const num         = p.numero || p.numeroProcesso || 'N/D';
+  const trib        = p.tribunal || 'N/D';
+  const classe      = p.classe   || 'N/D';
+  const assunto     = p.assunto  || 'N/D';
+  const valor       = p.valor    ? `R$ ${p.valor}` : 'N/D';
+  const dataInicio  = formatarData(p.data || p.dataAjuizamento);
+  const dataUltMov  = formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao);
+  const orgao       = p.orgao    || 'N/D';
+  const poloAtivo   = (p.partes || []).filter(x => ['AT','ATIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
+  const poloPassivo = (p.partes || []).filter(x => ['PA','PASSIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
 
   let txt = `PROCESSO: ${num}\n`;
-  txt += `🔗 LINK: ${link}\n`;
+  txt += `🔗 LINK: ${linkProcesso(num)}\n`;
   txt += `⚖️ TRIBUNAL: ${trib}\n`;
   txt += `📁 CLASSE: ${classe}\n`;
   txt += `📌 ASSUNTO: ${assunto}\n`;
@@ -109,13 +97,10 @@ function cardProcesso(p, i) {
     txt += `\n\n👤 POLO ATIVO:`;
     poloAtivo.forEach(parte => {
       const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
-      const tel = parte.telefone || 'Não informado';
-      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${tel}`;
-      if (parte.advogados && parte.advogados.length > 0) {
-        parte.advogados.forEach(adv => {
-          txt += `\n⚖️ Advogado: ${adv.nome || 'N/D'} | CPF: ${adv.cpf || 'N/D'}`;
-        });
-      }
+      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${parte.telefone || 'Não informado'}`;
+      (parte.advogados || []).forEach(adv => {
+        txt += `\n⚖️ Advogado: ${adv.nome || 'N/D'} | CPF: ${adv.cpf || 'N/D'}`;
+      });
     });
   }
 
@@ -123,15 +108,14 @@ function cardProcesso(p, i) {
     txt += `\n\n👤 POLO PASSIVO:`;
     poloPassivo.forEach(parte => {
       const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
-      const tel = parte.telefone || 'Não informado';
-      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${tel}`;
+      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${parte.telefone || 'Não informado'}`;
     });
   }
 
   return txt;
 }
 
-// ─── Gerar arquivo detalhes.txt ───────────────────────────────────────────────
+// ─── Gerar conteúdo do detalhes.txt ──────────────────────────────────────────
 function gerarTxt(estado, numero, processos, nomeAdvogado) {
   const linhas = [];
   linhas.push('='.repeat(60));
@@ -142,10 +126,10 @@ function gerarTxt(estado, numero, processos, nomeAdvogado) {
   linhas.push('='.repeat(60));
   linhas.push('');
 
-  processos.forEach((p, i) => {
-    const num = p.numero || p.numeroProcesso || 'N/D';
-    const poloAtivo   = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'AT' || (x.tipoPolo || '').toUpperCase() === 'ATIVO');
-    const poloPassivo = (p.partes || []).filter(x => (x.polo || '').toUpperCase() === 'PA' || (x.tipoPolo || '').toUpperCase() === 'PASSIVO');
+  processos.forEach((p) => {
+    const num         = p.numero || p.numeroProcesso || 'N/D';
+    const poloAtivo   = (p.partes || []).filter(x => ['AT','ATIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
+    const poloPassivo = (p.partes || []).filter(x => ['PA','PASSIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
 
     linhas.push(`PROCESSO: ${num}`);
     linhas.push(`LINK: ${linkProcesso(num)}`);
@@ -163,11 +147,9 @@ function gerarTxt(estado, numero, processos, nomeAdvogado) {
       poloAtivo.forEach(parte => {
         const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
         linhas.push(`- ${parte.nome || 'N/D'} | ${doc} | TEL: ${parte.telefone || 'Não informado'}`);
-        if (parte.advogados && parte.advogados.length > 0) {
-          parte.advogados.forEach(adv => {
-            linhas.push(`  Advogado: ${adv.nome || 'N/D'} | CPF: ${adv.cpf || 'N/D'}`);
-          });
-        }
+        (parte.advogados || []).forEach(adv => {
+          linhas.push(`  Advogado: ${adv.nome || 'N/D'} | CPF: ${adv.cpf || 'N/D'}`);
+        });
       });
     }
 
@@ -187,10 +169,11 @@ function gerarTxt(estado, numero, processos, nomeAdvogado) {
   return linhas.join('\n');
 }
 
-// ─── Busca OAB (IGUAL ao commit 8d64abc que funcionava) + novo formato ────────
+// ─── Busca e entrega (roda em background, sem limite de tempo) ───────────────
 async function processarOAB(chatId, estado, numero) {
   await enviarMensagem(chatId, `🔍 Buscando OAB *${estado} ${numero}*...`);
 
+  let dados;
   try {
     const resp = await fetch(`${NOSSA_API}/buscar/oab`, {
       method: 'POST',
@@ -200,56 +183,57 @@ async function processarOAB(chatId, estado, numero) {
       },
       body: JSON.stringify({ estado, numero }),
     });
-
-    const dados = await resp.json();
-
-    if (!dados.sucesso) {
-      await enviarMensagem(chatId, `❌ Erro: ${dados.mensagem || 'Falha na consulta'}`);
-      return;
-    }
-
-    const adv       = dados.dados?.advogado;
-    const processos = dados.dados?.processos || [];
-    const total     = dados.dados?.total_processos || processos.length;
-
-    if (total === 0) {
-      await enviarMensagem(chatId, `📋 Nenhum processo encontrado para OAB *${estado} ${numero}*.`);
-      return;
-    }
-
-    // 1. Confirmar quantidade
-    await enviarMensagem(chatId, `✅ *Encontrados ${total} processos*`);
-
-    // 2. Gerar e enviar arquivo detalhes.txt
-    await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.txt...*`);
-    const nomeArq  = `temp_${estado}${numero}_detalhes.txt`;
-    const conteudo = gerarTxt(estado, numero, processos, adv?.nome);
-    const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
-    await enviarArquivo(chatId, nomeArq, conteudo,
-      `📄 ${nomeArq}\n${kb} KB\n✅ Arquivo detalhes.txt gerado\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
-    );
-
-    // 3. Enviar processos individualmente em cards (máx 20)
-    const limite = Math.min(processos.length, 20);
-    for (let i = 0; i < limite; i++) {
-      await enviarMensagem(chatId, cardProcesso(processos[i], i + 1));
-      if (i < limite - 1) await new Promise(r => setTimeout(r, 300));
-    }
-
-    if (total > 20) {
-      await enviarMensagem(chatId,
-        `_...e mais ${total - 20} processo(s). Todos no arquivo detalhes.txt._`
-      );
-    }
-
+    dados = await resp.json();
   } catch (e) {
-    console.error('processarOAB error:', e);
     await enviarMensagem(chatId, `❌ Erro ao consultar a API: ${e.message}`);
+    return;
+  }
+
+  if (!dados.sucesso) {
+    await enviarMensagem(chatId, `❌ ${dados.mensagem || 'Falha na consulta'}`);
+    return;
+  }
+
+  const adv       = dados.dados?.advogado;
+  const processos = dados.dados?.processos || [];
+  const total     = dados.dados?.total_processos || processos.length;
+
+  if (total === 0) {
+    await enviarMensagem(chatId, `📋 Nenhum processo encontrado para OAB *${estado} ${numero}*.`);
+    return;
+  }
+
+  // 1. Confirmar quantidade encontrada
+  await enviarMensagem(chatId, `✅ *Encontrados ${total} processos*`);
+
+  // 2. Gerar e enviar arquivo detalhes.txt
+  await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.txt...*`);
+  const nomeArq  = `temp_${estado}${numero}_detalhes.txt`;
+  const conteudo = gerarTxt(estado, numero, processos, adv?.nome);
+  const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
+  await enviarArquivo(chatId, nomeArq, conteudo,
+    `📄 ${nomeArq}\n${kb} KB\n✅ Arquivo detalhes.txt gerado\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
+  );
+
+  // 3. Enviar os primeiros 20 processos como cards individuais
+  const limite = Math.min(processos.length, 20);
+  for (let i = 0; i < limite; i++) {
+    await enviarMensagem(chatId, cardProcesso(processos[i]));
+    if (i < limite - 1) await new Promise(r => setTimeout(r, 300));
+  }
+
+  if (total > 20) {
+    await enviarMensagem(chatId,
+      `_...e mais ${total - 20} processo(s). Todos no arquivo detalhes.txt._`
+    );
   }
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────
-exports.handler = async (event) => {
+exports.handler = async (event, context) => {
+  // Manter a função viva mesmo após retornar (não espera o processamento terminar)
+  context.callbackWaitsForEmptyEventLoop = false;
+
   try {
     const body     = JSON.parse(event.body || '{}');
     const mensagem = body.message || {};
@@ -264,7 +248,8 @@ exports.handler = async (event) => {
       if (!match) {
         await enviarMensagem(chatId, `❌ Formato inválido.\nUse: /oab UF NUMERO\nExemplo: /oab MS 3616`);
       } else {
-        await processarOAB(chatId, match[1].toUpperCase(), match[2]);
+        // Dispara em background e retorna OK imediatamente
+        processarOAB(chatId, match[1].toUpperCase(), match[2]);
       }
 
     } else if (/^\/(start|help|ajuda)$/i.test(texto)) {
