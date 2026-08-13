@@ -6,7 +6,7 @@ const NOSSA_CHAVE    = 'busca-processos-dev-key-2024';
 
 const { limparOAB, separarOAB } = require('../utils/validar');
 
-// ─── Telegram: enviar texto ───────────────────────────────────────────────────
+// ─── Enviar mensagem de texto ─────────────────────────────────────────────────
 async function enviarMensagem(chatId, texto) {
   try {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -19,7 +19,7 @@ async function enviarMensagem(chatId, texto) {
   }
 }
 
-// ─── Telegram: enviar arquivo .txt (multipart manual para node-fetch v2) ──────
+// ─── Enviar arquivo (multipart manual, node-fetch v2) ────────────────────────
 async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
   try {
     const boundary   = `----FormBoundary${Date.now()}`;
@@ -28,7 +28,7 @@ async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
       `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}`,
       `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${legenda}`,
     ];
-    const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${nomeArquivo}"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n`;
+    const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${nomeArquivo}"\r\nContent-Type: text/html; charset=utf-8\r\n\r\n`;
     const body = Buffer.concat([
       Buffer.from(partes.join('\r\n') + '\r\n', 'utf8'),
       Buffer.from(fileHeader, 'utf8'),
@@ -52,74 +52,38 @@ async function enviarArquivo(chatId, nomeArquivo, conteudo, legenda) {
 function formatarData(data) {
   if (!data) return 'N/D';
   const s = String(data);
-  if (s.length >= 8) return `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`;
-  return s.substring(0, 10);
+  // formato datajud: 20150204162217 → 2015-02-04
+  if (/^\d{14}$/.test(s)) return `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`;
+  // formato ISO: 2026-06-26T...
+  if (s.length >= 10) return s.substring(0, 10);
+  return s;
 }
 
-function linkProcesso(numero) {
-  if (!numero) return '';
-  return `https://supremodoseteoriginal.com/?processo=${numero}`;
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ─── Formatar um processo (igual ao print) ────────────────────────────────────
-function formatarProcesso(p) {
-  const num         = p.numero || p.numeroProcesso || 'N/D';
-  const poloAtivo   = (p.partes || []).filter(x => ['AT','ATIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
-  const poloPassivo = (p.partes || []).filter(x => ['PA','PASSIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
-
-  let txt = `PROCESSO: ${num}\n`;
-  txt += `🔗 LINK: ${linkProcesso(num)}\n`;
-  txt += `⚖️ TRIBUNAL: ${p.tribunal || 'N/D'}\n`;
-  txt += `📁 CLASSE: ${p.classe || 'N/D'}\n`;
-  txt += `📌 ASSUNTO: ${p.assunto || 'N/D'}\n`;
-  txt += `💰 VALOR: ${p.valor ? `R$ ${p.valor}` : 'N/D'}\n`;
-  txt += `📅 DATA INÍCIO: ${formatarData(p.data || p.dataAjuizamento)}\n`;
-  txt += `📅 ÚLTIMA MOVIMENTAÇÃO: ${formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao)}\n`;
-  txt += `👨‍⚖️ ÓRGÃO JULGADOR: ${p.orgao || 'N/D'}`;
-
-  if (poloAtivo.length > 0) {
-    txt += `\n\n👤 POLO ATIVO:`;
-    poloAtivo.forEach(parte => {
-      const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
-      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${parte.telefone || 'Não informado'}`;
-      (parte.advogados || []).forEach(adv => {
-        txt += `\n⚖️ Advogado: ${adv.nome || 'N/D'} | CPF: ${adv.cpf || 'N/D'}`;
-      });
-    });
-  }
-
-  if (poloPassivo.length > 0) {
-    txt += `\n\n👤 POLO PASSIVO:`;
-    poloPassivo.forEach(parte => {
-      const doc = parte.cpf ? `CPF: ${parte.cpf}` : parte.cnpj ? `CNPJ: ${parte.cnpj}` : 'DOC: N/D';
-      txt += `\n- ${parte.nome || 'N/D'} | ${doc} | TEL: ${parte.telefone || 'Não informado'}`;
-    });
-  }
-
-  return txt;
-}
-
-// ─── Gerar arquivo HTML com links clicáveis ──────────────────────────────────
+// ─── Gerar HTML — formato exato do print ─────────────────────────────────────
 function gerarHTML(estado, numero, processos, nomeAdvogado) {
   const geradoEm = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
-  function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  function linhaPartes(partes, titulo) {
+  function renderPartes(partes, titulo) {
     if (!partes || partes.length === 0) return '';
-    let h = `<div class="polo"><strong>${titulo}</strong><ul>`;
+    let h = `<div class="polo-titulo">${titulo}</div><ul class="polo-lista">`;
     partes.forEach(parte => {
-      const doc = parte.cpf ? `CPF: ${esc(parte.cpf)}` : parte.cnpj ? `CNPJ: ${esc(parte.cnpj)}` : '';
-      const tel = parte.telefone ? `TEL: <a href="tel:${esc(parte.telefone)}">${esc(parte.telefone)}</a>` : 'TEL: Não informado';
-      h += `<li>${esc(parte.nome || 'N/D')}${doc ? ' | ' + doc : ''} | ${tel}`;
+      const cpf  = parte.cpf  ? `CPF: ${esc(parte.cpf)}`  : '';
+      const cnpj = parte.cnpj ? `CNPJ: ${esc(parte.cnpj)}` : '';
+      const doc  = cpf || cnpj || '';
+      const tel  = parte.telefone ? `TEL: ${esc(parte.telefone)}` : 'TEL: Não informado';
+      const email = parte.email   ? ` | EMAIL: <a href="mailto:${esc(parte.email)}">${esc(parte.email)}</a>` : '';
+      h += `<li>${esc(parte.nome || 'N/D')}${doc ? ' | ' + doc : ''} | ${tel}${email}`;
       (parte.advogados || []).forEach(adv => {
-        h += `<br>⚖️ Advogado: ${esc(adv.nome || 'N/D')}${adv.cpf ? ' | CPF: ' + esc(adv.cpf) : ''}`;
+        const advDoc = adv.cpf ? ` | CPF: ${esc(adv.cpf)}` : '';
+        h += `<br><span class="adv">⚖️ Advogado: ${esc(adv.nome || 'N/D')}${advDoc}</span>`;
       });
       h += `</li>`;
     });
-    h += `</ul></div>`;
+    h += `</ul>`;
     return h;
   }
 
@@ -128,23 +92,23 @@ function gerarHTML(estado, numero, processos, nomeAdvogado) {
     const link        = `https://supremodoseteoriginal.com/?processo=${encodeURIComponent(num)}`;
     const poloAtivo   = (p.partes || []).filter(x => ['AT','ATIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
     const poloPassivo = (p.partes || []).filter(x => ['PA','PASSIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
+    const valor       = p.valor ? `R$ ${esc(p.valor)}` : 'N/D';
+    const dataInicio  = formatarData(p.data || p.dataAjuizamento);
+    const dataUltMov  = formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao);
 
-    return `
-    <div class="card">
-      <div class="num">#${i+1} — ${esc(num)}</div>
-      <table>
-        <tr><td>🔗 LINK</td><td><a href="${link}" target="_blank">${esc(num)}</a></td></tr>
-        <tr><td>⚖️ TRIBUNAL</td><td>${esc(p.tribunal || 'N/D')}</td></tr>
-        <tr><td>📁 CLASSE</td><td>${esc(p.classe || 'N/D')}</td></tr>
-        <tr><td>📌 ASSUNTO</td><td>${esc(p.assunto || 'N/D')}</td></tr>
-        <tr><td>💰 VALOR</td><td>${p.valor ? 'R$ ' + esc(p.valor) : 'N/D'}</td></tr>
-        <tr><td>📅 DATA INÍCIO</td><td>${esc(formatarData(p.data || p.dataAjuizamento))}</td></tr>
-        <tr><td>📅 ÚLTIMA MOV.</td><td>${esc(formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao))}</td></tr>
-        <tr><td>👨‍⚖️ ÓRGÃO</td><td>${esc(p.orgao || 'N/D')}</td></tr>
-      </table>
-      ${linhaPartes(poloAtivo,  '👤 POLO ATIVO')}
-      ${linhaPartes(poloPassivo,'👤 POLO PASSIVO')}
-    </div>`;
+    return `<div class="card">
+  <div class="proc-num">PROCESSO: ${esc(num)}</div>
+  <div class="row">🔗 <b>LINK:</b> <a href="${link}" target="_blank">${link}</a></div>
+  <div class="row">⚖️ <b>TRIBUNAL:</b> ${esc(p.tribunal || 'N/D')}</div>
+  <div class="row">📁 <b>CLASSE:</b> ${esc(p.classe || 'N/D')}</div>
+  <div class="row">📌 <b>ASSUNTO:</b> ${esc(p.assunto || 'N/D')}</div>
+  <div class="row">💰 <b>VALOR:</b> ${valor}</div>
+  <div class="row">📅 <b>DATA INÍCIO:</b> ${esc(dataInicio)}</div>
+  <div class="row">📅 <b>ÚLTIMA MOVIMENTAÇÃO:</b> ${esc(dataUltMov)}</div>
+  <div class="row">👨‍⚖️ <b>ÓRGÃO JULGADOR:</b> ${esc(p.orgao || 'N/D')}</div>
+  ${poloAtivo.length   > 0 ? renderPartes(poloAtivo,   '👤 POLO ATIVO:')   : ''}
+  ${poloPassivo.length > 0 ? renderPartes(poloPassivo, '👤 POLO PASSIVO:') : ''}
+</div>`;
   }).join('\n');
 
   return `<!DOCTYPE html>
@@ -152,29 +116,33 @@ function gerarHTML(estado, numero, processos, nomeAdvogado) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OAB ${estado}${numero} — Processos</title>
+<title>OAB ${esc(estado)}${esc(numero)} — Processos</title>
 <style>
-  body{font-family:Arial,sans-serif;background:#111;color:#eee;margin:0;padding:16px}
-  h1{color:#fff;font-size:1.2em;border-bottom:1px solid #444;padding-bottom:8px}
-  .meta{color:#aaa;font-size:.85em;margin-bottom:16px}
-  .card{background:#1e1e2e;border:1px solid #333;border-radius:8px;padding:14px;margin-bottom:16px}
-  .num{font-weight:bold;color:#7eb8f7;margin-bottom:8px;font-size:.95em}
-  table{width:100%;border-collapse:collapse;font-size:.88em}
-  td{padding:4px 6px;vertical-align:top}
-  td:first-child{white-space:nowrap;color:#aaa;width:140px}
-  a{color:#7eb8f7;text-decoration:none}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#000;color:#fff;padding:12px}
+  h1{font-size:1.1em;margin-bottom:4px;color:#fff}
+  .meta{font-size:.82em;color:#aaa;margin-bottom:14px}
+  .card{
+    background:#2a2a2a;
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:14px;
+  }
+  .proc-num{font-weight:bold;font-size:.95em;margin-bottom:8px;color:#fff}
+  .row{font-size:.87em;margin-bottom:4px;line-height:1.5;color:#eee}
+  a{color:#6ab3f8;text-decoration:none}
   a:hover{text-decoration:underline}
-  .polo{margin-top:8px;font-size:.86em}
-  .polo strong{color:#ccc}
-  .polo ul{margin:4px 0 0 16px;padding:0}
-  .polo li{margin-bottom:4px;line-height:1.5}
+  .polo-titulo{font-size:.87em;font-weight:bold;margin-top:10px;margin-bottom:4px;color:#eee}
+  .polo-lista{list-style:none;padding-left:0}
+  .polo-lista li{font-size:.84em;color:#ddd;margin-bottom:6px;line-height:1.6;border-left:2px solid #555;padding-left:8px}
+  .adv{color:#aac8f0;font-size:.95em}
 </style>
 </head>
 <body>
 <h1>📋 OAB ${esc(estado)}${esc(numero)} — Processos Judiciais</h1>
 <div class="meta">
-  ${nomeAdvogado ? `👤 Advogado: <strong>${esc(nomeAdvogado)}</strong><br>` : ''}
-  📊 Total: <strong>${processos.length} processos</strong><br>
+  ${nomeAdvogado ? `👤 <b>${esc(nomeAdvogado)}</b> &nbsp;|&nbsp; ` : ''}
+  📊 <b>${processos.length} processos</b> &nbsp;|&nbsp;
   🕐 Gerado em: ${esc(geradoEm)}
 </div>
 ${cards}
@@ -182,7 +150,7 @@ ${cards}
 </html>`;
 }
 
-// ─── Busca OAB — IDÊNTICA ao commit 8d64abc que funcionava ───────────────────
+// ─── Busca OAB — UMA chamada só, sem retry ────────────────────────────────────
 async function processarOAB(chatId, estado, numero) {
   await enviarMensagem(chatId, `🔍 Buscando OAB *${estado} ${numero}*...`);
 
@@ -212,23 +180,17 @@ async function processarOAB(chatId, estado, numero) {
       return;
     }
 
-    // 1. Confirmar quantidade
+    // Confirmar quantidade
     await enviarMensagem(chatId, `✅ *Encontrados ${total} processos*`);
 
-    // 2. Gerar e enviar arquivo HTML com todos os processos e links clicáveis
-    await enviarMensagem(chatId, `📁 *Gerando arquivo detalhes.html...*`);
+    // Gerar e enviar arquivo HTML com todos os processos
+    await enviarMensagem(chatId, `📁 *Gerando arquivo HTML...*`);
     const nomeArq  = `OAB_${estado}${numero}_processos.html`;
     const conteudo = gerarHTML(estado, numero, processos, adv?.nome);
     const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
     await enviarArquivo(chatId, nomeArq, conteudo,
-      `🌐 ${nomeArq}\n${kb} KB\n✅ Arquivo HTML gerado — abra no navegador\nOAB: ${estado}${numero}\n📊 Processos: ${total}`
+      `🌐 ${nomeArq}\n${kb} KB — abra no navegador\nOAB: ${estado}${numero} | 📊 ${total} processos`
     );
-
-    // 3. Enviar TODOS os processos como cards individuais
-    for (let i = 0; i < processos.length; i++) {
-      await enviarMensagem(chatId, formatarProcesso(processos[i]));
-      if (i < processos.length - 1) await new Promise(r => setTimeout(r, 300));
-    }
 
   } catch (e) {
     console.error('processarOAB error:', e);
