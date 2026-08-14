@@ -4,3 +4,8 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# bot-background é uma Netlify Background Function (timeout 15 min)
+# O Netlify identifica automaticamente pelo sufixo "-background" no nome do arquivo
+[functions."bot-background"]
+  node_bundler = "esbuild"

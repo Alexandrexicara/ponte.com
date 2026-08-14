@@ -1,7 +1,20 @@
 const fetch = require('node-fetch');
 
+// ─── Tokens dos bots ──────────────────────────────────────────────────────────
+const BOTS = [
+  '8701852568:AAHZw2eiUzHzlAlVRU0_qGNk1UBmTXAjwVo',
+  '8783865981:AAG2MP2vb0iLeIeDWewKb5JQXYKL6JxPIiM',
+];
+
 const NOSSA_API   = 'https://busca-processos.onrender.com/api/v1';
 const NOSSA_CHAVE = 'busca-processos-dev-key-2024';
+
+// ─── Identifica o token correto pelo ?token= na query string ─────────────────
+function resolverToken(event) {
+  const qs = event.queryStringParameters || {};
+  if (qs.token && BOTS.includes(qs.token)) return qs.token;
+  return BOTS[0];
+}
 
 // ─── Enviar mensagem de texto ─────────────────────────────────────────────────
 async function enviarMensagem(token, chatId, texto) {
@@ -55,13 +68,11 @@ function formatarData(data) {
 }
 
 function formatarNumeroProcesso(num) {
-  // Remove tudo que não é dígito
   const d = String(num || '').replace(/\D/g, '');
-  // Formato CNJ: NNNNNNN-DD.AAAA.J.TT.OOOO (20 dígitos)
   if (d.length === 20) {
     return `${d.slice(0,7)}-${d.slice(7,9)}.${d.slice(9,13)}.${d.slice(13,14)}.${d.slice(14,16)}.${d.slice(16,20)}`;
   }
-  return num; // Se não tiver 20 dígitos, retorna como veio
+  return num;
 }
 
 function esc(s) {
@@ -92,7 +103,7 @@ function gerarHTML(estado, numero, processos, nomeAdvogado) {
     return h;
   }
 
-  const cards = processos.map((p, i) => {
+  const cards = processos.map((p) => {
     const numRaw      = p.numero || p.numeroProcesso || 'N/D';
     const num         = formatarNumeroProcesso(numRaw);
     const link        = `https://supremodoseteoriginal.com/?processo=${num}`;
@@ -152,7 +163,6 @@ ${cards}
 // ─── Acorda o Render e espera estar pronto ────────────────────────────────────
 async function acordarRender() {
   const BASE = 'https://busca-processos.onrender.com';
-  // Tenta até 5 vezes com 5s de intervalo (25s max — suficiente para Render acordar)
   for (let i = 0; i < 5; i++) {
     try {
       const r = await fetch(`${BASE}/health`, { method: 'GET' });
@@ -167,7 +177,6 @@ async function acordarRender() {
 async function processarOAB(token, chatId, estado, numero) {
   await enviarMensagem(token, chatId, `🔍 Buscando OAB *${estado} ${numero}*...`);
 
-  // Acorda o Render antes de buscar
   await acordarRender();
 
   try {
@@ -193,8 +202,7 @@ async function processarOAB(token, chatId, estado, numero) {
       return;
     }
 
-    await enviarMensagem(token, chatId, `✅ *Encontrados ${total} processos*`);
-    await enviarMensagem(token, chatId, `📁 *Gerando arquivo HTML...*`);
+    await enviarMensagem(token, chatId, `✅ *Encontrados ${total} processos*\n📁 Gerando arquivo HTML...`);
 
     const nomeArq  = `OAB_${estado}${numero}_processos.html`;
     const conteudo = gerarHTML(estado, numero, processos, adv?.nome);
@@ -213,21 +221,52 @@ async function processarOAB(token, chatId, estado, numero) {
 // ─── Controle de duplicatas ───────────────────────────────────────────────────
 const processados = new Set();
 
-// ─── Handler background — sem limite de tempo ────────────────────────────────
+// ─── Handler — Netlify Background Function ────────────────────────────────────
+// O Netlify responde 202 automaticamente ao Telegram e executa este handler
+// sem limite de 10s — até 15 minutos disponíveis.
+// O webhook do Telegram deve apontar para:
+//   https://<site>/.netlify/functions/bot-background?token=TOKEN
 exports.handler = async (event) => {
   try {
-    const { token, chatId, estado, numero } = JSON.parse(event.body || '{}');
-    if (!token || !chatId || !estado || !numero) return { statusCode: 200, body: 'OK' };
+    const token    = resolverToken(event);
+    const body     = JSON.parse(event.body || '{}');
+    const updateId = body.update_id;
+    const mensagem = body.message || {};
+    const chatId   = mensagem.chat?.id;
+    const texto    = (mensagem.text || '').trim();
 
-    const chave = `${token}:${chatId}:${estado}:${numero}`;
-    if (processados.has(chave)) return { statusCode: 200, body: 'OK' };
-    processados.add(chave);
-    setTimeout(() => processados.delete(chave), 120000); // limpa após 2min
+    if (!chatId) return { statusCode: 200, body: 'OK' };
 
-    await processarOAB(token, chatId, estado, numero);
+    // Ignorar updates duplicados
+    if (updateId && processados.has(updateId)) {
+      return { statusCode: 200, body: 'OK' };
+    }
+    if (updateId) processados.add(updateId);
+    if (processados.size > 500) processados.clear();
+
+    if (/^\/oab\s+/i.test(texto)) {
+      const arg   = texto.replace(/^\/oab\s+/i, '').trim();
+      const match = arg.match(/^([A-Za-z]{2})\s*(\d+)$/);
+      if (!match) {
+        await enviarMensagem(token, chatId, `❌ Formato inválido.\nUse: /oab UF NUMERO\nExemplo: /oab MS 3616`);
+      } else {
+        await processarOAB(token, chatId, match[1].toUpperCase(), match[2]);
+      }
+
+    } else if (/^\/(start|help|ajuda)$/i.test(texto)) {
+      await enviarMensagem(token, chatId,
+        `👋 *Bot de Processos Judiciais*\n\n` +
+        `*/oab UF NUMERO* — busca processos do advogado\n\n` +
+        `Exemplo: /oab MS 3616`
+      );
+
+    } else if (texto.startsWith('/')) {
+      await enviarMensagem(token, chatId, `❓ Comando não reconhecido. Use /ajuda.`);
+    }
+
     return { statusCode: 200, body: 'OK' };
   } catch (e) {
-    console.error('Background error:', e);
+    console.error('Handler error:', e);
     return { statusCode: 200, body: 'OK' };
   }
 };
