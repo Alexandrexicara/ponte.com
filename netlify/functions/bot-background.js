@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 const https = require('https');
 
-// ─── Scraper TJSP: busca partes, advogados e valor direto no site do tribunal ─
+// ─── HTTP helper ──────────────────────────────────────────────────────────────
 function fetchHtmlTJSP(url) {
   return new Promise((resolve) => {
     const req = https.get(url, {
@@ -38,6 +38,122 @@ function htmlDecode(s) {
     .replace(/&#\d+;/g,'').replace(/\s+/g,' ').trim();
 }
 
+// ─── Extrai dados de uma página individual de processo do TJSP ────────────────
+function parsePaginaProcesso(html, linkOrigem) {
+  if (!html) return null;
+
+  // Número CNJ
+  const mNum = html.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/);
+  const numero = mNum ? mNum[0] : null;
+
+  // Valor da causa
+  const mValor = html.match(/id="valorAcaoProcesso"[^>]*>\s*([^<]+)/);
+  const valor_display = mValor ? mValor[1].replace(/\s+/g,' ').trim() : null;
+  const valor = valor_display ? valor_display.replace('R$','').replace(/\s/g,'').replace(',','.') : null;
+
+  // Classe
+  const mClasse = html.match(/id="classeProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
+  const classe = mClasse ? htmlDecode(mClasse[1]) : null;
+
+  // Assunto
+  const mAssunto = html.match(/id="assuntoProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
+  const assunto = mAssunto ? htmlDecode(mAssunto[1]) : null;
+
+  // Órgão julgador
+  const mOrgao = html.match(/id="orgaoJulgadorProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
+  const orgao = mOrgao ? htmlDecode(mOrgao[1]) : null;
+
+  // Data de ajuizamento
+  const mData = html.match(/id="dataHoraDistribuicaoProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
+  const data = mData ? htmlDecode(mData[1]) : null;
+
+  // Partes — extrai da tabela nomeParteEAdvogado
+  const nomesRaw = html.match(/class="nomeParteEAdvogado"[^>]*>\s*\n?\s*([^\n<]{3,})/g) || [];
+  const partes = [];
+  const vistos = new Set();
+  for (const m of nomesRaw) {
+    const nome = htmlDecode(m.replace(/class="nomeParteEAdvogado"[^>]*>\s*\n?\s*/,'').trim());
+    if (nome && nome.length > 2 && !vistos.has(nome)) {
+      vistos.add(nome);
+      partes.push({ nome, polo: '', advogados: [] });
+    }
+  }
+
+  // Advogados
+  const advsRaw = [...new Set(
+    (html.match(/Advogados?\(s?\):\s*([^\n<]+)/gi) || [])
+      .map(a => htmlDecode(a.replace(/Advogados?\(s?\):\s*/i,'').trim()))
+  )];
+  const advogados = advsRaw.map(txt => {
+    const mOAB = txt.match(/\(OAB\s*([\w\/]+)\)/i);
+    return { nome: txt.replace(/\s*\(OAB[^)]+\)/i,'').trim(), oab: mOAB ? mOAB[1] : '' };
+  }).filter(a => a.nome);
+
+  // Adiciona advogados nas partes
+  if (advogados.length > 0) {
+    for (const p of partes) p.advogados = advogados;
+  }
+
+  // Última movimentação
+  const movDatas = html.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
+
+  return {
+    numero,
+    tribunal: 'TJSP',
+    classe,
+    assunto,
+    orgao,
+    data,
+    valor,
+    valor_display,
+    partes,
+    advogados_tjsp: advogados,
+    dataUltimaMovimentacao: movDatas[movDatas.length - 1] || null,
+    fonte: 'TJSP_SCRAPER',
+  };
+}
+
+// ─── Busca por OAB direto no TJSP (sem usar o DataJud) ────────────────────────
+async function buscarOABnoTJSP(numeroOAB, maxProcessos = 30) {
+  const urlLista = `https://esaj.tjsp.jus.br/cpopg/search.do?conversationId=` +
+    `&cbPesquisa=NUMOAB&dadosConsulta.valorConsulta=${encodeURIComponent(numeroOAB)}` +
+    `&dadosConsulta.valorConsultaNuUnificado=&dadosConsulta.localPesquisa.cdLocal=-1`;
+
+  const htmlLista = await fetchHtmlTJSP(urlLista);
+  if (!htmlLista) return [];
+
+  // Extrai links individuais dos processos (processo.codigo + foro)
+  const linkRegex = /href="(\/cpopg\/show\.do\?processo\.codigo=[^"]+)"/g;
+  const links = [];
+  let m;
+  while ((m = linkRegex.exec(htmlLista)) !== null) {
+    const href = 'https://esaj.tjsp.jus.br' + m[1];
+    // Remove parâmetros de paginação desnecessários
+    if (!links.includes(href) && links.length < maxProcessos) {
+      links.push(href);
+    }
+  }
+
+  if (links.length === 0) return [];
+
+  // Busca cada processo individualmente em lotes de 3
+  const processos = [];
+  for (let i = 0; i < links.length; i += 3) {
+    const lote = links.slice(i, i + 3);
+    const resultados = await Promise.all(lote.map(async (link) => {
+      const html = await fetchHtmlTJSP(link);
+      return parsePaginaProcesso(html, link);
+    }));
+    for (const r of resultados) {
+      if (r && r.numero) processos.push(r);
+    }
+    if (i + 3 < links.length) await new Promise(r => setTimeout(r, 600));
+  }
+
+  return processos;
+}
+
+// ─── Enriquece processos do TJSP vindos do DataJud ───────────────────────────
 async function enriquecerTJSP(processo) {
   const tribunal = (processo.tribunal || '').toUpperCase();
   if (!tribunal.includes('TJSP')) return processo;
@@ -50,58 +166,20 @@ async function enriquecerTJSP(processo) {
     `&dadosConsulta.valorConsultaNuUnificado=${encodeURIComponent(cnj)}` +
     `&dadosConsulta.localPesquisa.cdLocal=-1&dadosConsulta.tipoNuProcesso=UNIFICADO`;
 
-  try {
-    const html = await fetchHtmlTJSP(url);
-    if (!html || html.includes('captcha') || html.includes('robot')) return processo;
+  const html = await fetchHtmlTJSP(url);
+  if (!html) return processo;
 
-    // Valor da causa
-    const mValor = html.match(/id="valorAcaoProcesso"[^>]*>\s*([^<]+)/);
-    const valor = mValor ? mValor[1].replace(/\s+/g,' ').trim() : null;
+  const dados = parsePaginaProcesso(html, url);
+  if (!dados) return processo;
 
-    // Partes
-    const nomesRaw = html.match(/class="nomeParteEAdvogado"[^>]*>\s*\n?\s*([^\n<]{3,})/g) || [];
-    const partes = [];
-    const vistos = new Set();
-    for (const m of nomesRaw) {
-      const nome = htmlDecode(m.replace(/class="nomeParteEAdvogado"[^>]*>\s*\n?\s*/,'').trim());
-      if (nome && nome.length > 2 && !vistos.has(nome)) {
-        vistos.add(nome);
-        partes.push({ nome, polo: '', advogados: [] });
-      }
-    }
-
-    // Advogados
-    const advsRaw = [...new Set(
-      (html.match(/Advogados?\(s?\):\s*([^\n<]+)/gi) || [])
-        .map(a => htmlDecode(a.replace(/Advogados?\(s?\):\s*/i,'').trim()))
-    )];
-    const advObjs = advsRaw.map(txt => {
-      const mOAB = txt.match(/\(OAB\s*([\w\/]+)\)/i);
-      return { nome: txt.replace(/\s*\(OAB[^)]+\)/i,'').trim(), oab: mOAB ? mOAB[1] : '' };
-    }).filter(a => a.nome);
-
-    // Coloca advogados nas partes
-    if (advObjs.length > 0) {
-      for (const p of partes) p.advogados = advObjs;
-      // Se não achou partes, pelo menos salva os advogados separado
-    }
-
-    // Classe e órgão
-    const mClasse = html.match(/id="classeProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
-    const mOrgao  = html.match(/id="orgaoJulgadorProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
-
-    return {
-      ...processo,
-      ...(valor  && !processo.valor  ? { valor: valor.replace('R$','').trim(), valor_display: valor } : {}),
-      ...(partes.length > 0 && (!processo.partes || processo.partes.length === 0) ? { partes } : {}),
-      ...(advObjs.length > 0 ? { advogados_tjsp: advObjs } : {}),
-      ...(mClasse && !processo.classe ? { classe: htmlDecode(mClasse[1]) } : {}),
-      ...(mOrgao  && !processo.orgao  ? { orgao: htmlDecode(mOrgao[1]) }  : {}),
-    };
-  } catch (e) {
-    console.warn('[TJSP]', e.message);
-    return processo;
-  }
+  return {
+    ...processo,
+    ...(dados.valor_display && !processo.valor ? { valor: dados.valor, valor_display: dados.valor_display } : {}),
+    ...(dados.partes.length > 0 && (!processo.partes || processo.partes.length === 0) ? { partes: dados.partes } : {}),
+    ...(dados.advogados_tjsp.length > 0 ? { advogados_tjsp: dados.advogados_tjsp } : {}),
+    ...(dados.classe && !processo.classe ? { classe: dados.classe } : {}),
+    ...(dados.orgao  && !processo.orgao  ? { orgao:  dados.orgao  } : {}),
+  };
 }
 
 async function enriquecerListaTJSP(lista) {
@@ -110,7 +188,7 @@ async function enriquecerListaTJSP(lista) {
     const lote = lista.slice(i, i + 3);
     const enriquecidos = await Promise.all(lote.map(p => enriquecerTJSP(p)));
     resultado.push(...enriquecidos);
-    if (i + 3 < lista.length) await new Promise(r => setTimeout(r, 700));
+    if (i + 3 < lista.length) await new Promise(r => setTimeout(r, 600));
   }
   return resultado;
 }
@@ -319,6 +397,31 @@ async function acordarRender() {
 async function processarOAB(token, chatId, estado, numero) {
   await enviarMensagem(token, chatId, `🔍 Buscando OAB *${estado} ${numero}*...`);
 
+  // ── Para OAB SP: busca direto no site do TJSP (partes + valor + advogado) ──
+  if (estado.toUpperCase() === 'SP') {
+    try {
+      await enviarMensagem(token, chatId, `🔍 Consultando TJSP diretamente...`);
+      const processosTJSP = await buscarOABnoTJSP(numero, 30);
+
+      if (processosTJSP.length > 0) {
+        await enviarMensagem(token, chatId, `✅ *${processosTJSP.length} processos encontrados no TJSP*\n📁 Gerando arquivo HTML...`);
+        const nomeArq  = `OAB_${estado}${numero}_processos.html`;
+        const conteudo = gerarHTML(estado, numero, processosTJSP, null);
+        const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
+        await enviarArquivo(token, chatId, nomeArq, conteudo,
+          `🌐 ${nomeArq}\n${kb} KB — abra no navegador\nOAB: ${estado}${numero} | 📊 ${processosTJSP.length} processos (TJSP)`
+        );
+        return;
+      }
+      // Se não achou no TJSP, cai para o DataJud
+      await enviarMensagem(token, chatId, `ℹ️ Nenhum processo no TJSP. Consultando outros tribunais...`);
+    } catch (e) {
+      console.warn('[TJSP direto]', e.message);
+      await enviarMensagem(token, chatId, `ℹ️ TJSP indisponível. Consultando via DataJud...`);
+    }
+  }
+
+  // ── Fallback: DataJud (todos os tribunais) ────────────────────────────────
   await acordarRender();
 
   try {
