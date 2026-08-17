@@ -1,4 +1,119 @@
 const fetch = require('node-fetch');
+const https = require('https');
+
+// ─── Scraper TJSP: busca partes, advogados e valor direto no site do tribunal ─
+function fetchHtmlTJSP(url) {
+  return new Promise((resolve) => {
+    const req = https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Accept-Encoding': 'identity',
+      }
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fetchHtmlTJSP(res.headers.location).then(resolve);
+        return;
+      }
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { data += c; });
+      res.on('end', () => resolve(data));
+    });
+    req.setTimeout(12000, () => { req.destroy(); resolve(''); });
+    req.on('error', () => resolve(''));
+  });
+}
+
+function htmlDecode(s) {
+  return String(s || '')
+    .replace(/&acirc;/g,'â').replace(/&atilde;/g,'ã').replace(/&otilde;/g,'õ')
+    .replace(/&eacute;/g,'é').replace(/&ecirc;/g,'ê').replace(/&iacute;/g,'í')
+    .replace(/&oacute;/g,'ó').replace(/&ocirc;/g,'ô').replace(/&uacute;/g,'ú')
+    .replace(/&ccedil;/g,'ç').replace(/&Aacute;/g,'Á').replace(/&Atilde;/g,'Ã')
+    .replace(/&Eacute;/g,'É').replace(/&Iacute;/g,'Í').replace(/&Oacute;/g,'Ó')
+    .replace(/&Uacute;/g,'Ú').replace(/&Ccedil;/g,'Ç').replace(/&amp;/g,'&')
+    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ')
+    .replace(/&#\d+;/g,'').replace(/\s+/g,' ').trim();
+}
+
+async function enriquecerTJSP(processo) {
+  const tribunal = (processo.tribunal || '').toUpperCase();
+  if (!tribunal.includes('TJSP')) return processo;
+
+  const raw = String(processo.numero || processo.numeroProcesso || '').replace(/\D/g,'');
+  if (raw.length !== 20) return processo;
+  const cnj = `${raw.slice(0,7)}-${raw.slice(7,9)}.${raw.slice(9,13)}.${raw.slice(13,14)}.${raw.slice(14,16)}.${raw.slice(16,20)}`;
+
+  const url = `https://esaj.tjsp.jus.br/cpopg/search.do?conversationId=&cbPesquisa=NUMPROC` +
+    `&dadosConsulta.valorConsultaNuUnificado=${encodeURIComponent(cnj)}` +
+    `&dadosConsulta.localPesquisa.cdLocal=-1&dadosConsulta.tipoNuProcesso=UNIFICADO`;
+
+  try {
+    const html = await fetchHtmlTJSP(url);
+    if (!html || html.includes('captcha') || html.includes('robot')) return processo;
+
+    // Valor da causa
+    const mValor = html.match(/id="valorAcaoProcesso"[^>]*>\s*([^<]+)/);
+    const valor = mValor ? mValor[1].replace(/\s+/g,' ').trim() : null;
+
+    // Partes
+    const nomesRaw = html.match(/class="nomeParteEAdvogado"[^>]*>\s*\n?\s*([^\n<]{3,})/g) || [];
+    const partes = [];
+    const vistos = new Set();
+    for (const m of nomesRaw) {
+      const nome = htmlDecode(m.replace(/class="nomeParteEAdvogado"[^>]*>\s*\n?\s*/,'').trim());
+      if (nome && nome.length > 2 && !vistos.has(nome)) {
+        vistos.add(nome);
+        partes.push({ nome, polo: '', advogados: [] });
+      }
+    }
+
+    // Advogados
+    const advsRaw = [...new Set(
+      (html.match(/Advogados?\(s?\):\s*([^\n<]+)/gi) || [])
+        .map(a => htmlDecode(a.replace(/Advogados?\(s?\):\s*/i,'').trim()))
+    )];
+    const advObjs = advsRaw.map(txt => {
+      const mOAB = txt.match(/\(OAB\s*([\w\/]+)\)/i);
+      return { nome: txt.replace(/\s*\(OAB[^)]+\)/i,'').trim(), oab: mOAB ? mOAB[1] : '' };
+    }).filter(a => a.nome);
+
+    // Coloca advogados nas partes
+    if (advObjs.length > 0) {
+      for (const p of partes) p.advogados = advObjs;
+      // Se não achou partes, pelo menos salva os advogados separado
+    }
+
+    // Classe e órgão
+    const mClasse = html.match(/id="classeProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
+    const mOrgao  = html.match(/id="orgaoJulgadorProcesso"[^>]*>[\s\S]{0,300}?<span[^>]*>\s*([^<]+)/);
+
+    return {
+      ...processo,
+      ...(valor  && !processo.valor  ? { valor: valor.replace('R$','').trim(), valor_display: valor } : {}),
+      ...(partes.length > 0 && (!processo.partes || processo.partes.length === 0) ? { partes } : {}),
+      ...(advObjs.length > 0 ? { advogados_tjsp: advObjs } : {}),
+      ...(mClasse && !processo.classe ? { classe: htmlDecode(mClasse[1]) } : {}),
+      ...(mOrgao  && !processo.orgao  ? { orgao: htmlDecode(mOrgao[1]) }  : {}),
+    };
+  } catch (e) {
+    console.warn('[TJSP]', e.message);
+    return processo;
+  }
+}
+
+async function enriquecerListaTJSP(lista) {
+  const resultado = [];
+  for (let i = 0; i < lista.length; i += 3) {
+    const lote = lista.slice(i, i + 3);
+    const enriquecidos = await Promise.all(lote.map(p => enriquecerTJSP(p)));
+    resultado.push(...enriquecidos);
+    if (i + 3 < lista.length) await new Promise(r => setTimeout(r, 700));
+  }
+  return resultado;
+}
 
 // ─── Tokens dos bots ──────────────────────────────────────────────────────────
 const BOTS = [
@@ -87,17 +202,30 @@ function gerarHTML(estado, numero, processos, nomeAdvogado) {
     if (!partes || partes.length === 0) return '';
     let h = `<div class="polo-titulo">${titulo}</div><ul class="polo-lista">`;
     partes.forEach(parte => {
-      const cpf   = parte.cpf  ? `CPF: ${esc(parte.cpf)}`   : '';
-      const cnpj  = parte.cnpj ? `CNPJ: ${esc(parte.cnpj)}` : '';
-      const doc   = cpf || cnpj || '';
-      const tel   = parte.telefone ? `TEL: ${esc(parte.telefone)}` : 'TEL: Não informado';
+      const cpf   = parte.cpf  ? ` | CPF: ${esc(parte.cpf)}`   : '';
+      const cnpj  = parte.cnpj ? ` | CNPJ: ${esc(parte.cnpj)}` : '';
+      const tel   = parte.telefone ? ` | TEL: ${esc(parte.telefone)}` : '';
       const email = parte.email ? ` | EMAIL: <a href="mailto:${esc(parte.email)}">${esc(parte.email)}</a>` : '';
-      h += `<li>${esc(parte.nome || 'N/D')}${doc ? ' | ' + doc : ''} | ${tel}${email}`;
+      h += `<li><b>${esc(parte.nome || 'N/D')}</b>${cpf}${cnpj}${tel}${email}`;
       (parte.advogados || []).forEach(adv => {
-        const advDoc = adv.cpf ? ` | CPF: ${esc(adv.cpf)}` : '';
-        h += `<br><span class="adv">⚖️ Advogado: ${esc(adv.nome || 'N/D')}${advDoc}</span>`;
+        const oabTxt  = adv.oab  ? ` — OAB: ${esc(adv.oab)}`  : '';
+        const advDoc  = adv.cpf  ? ` | CPF: ${esc(adv.cpf)}`  : '';
+        const advTel  = adv.telefone ? ` | TEL: ${esc(adv.telefone)}` : '';
+        const advEmail= adv.email    ? ` | EMAIL: <a href="mailto:${esc(adv.email)}">${esc(adv.email)}</a>` : '';
+        h += `<br><span class="adv">⚖️ Adv: ${esc(adv.nome || 'N/D')}${oabTxt}${advDoc}${advTel}${advEmail}</span>`;
       });
       h += `</li>`;
+    });
+    h += `</ul>`;
+    return h;
+  }
+
+  function renderAdvogados(advs) {
+    if (!advs || advs.length === 0) return '';
+    let h = `<div class="polo-titulo">⚖️ ADVOGADOS:</div><ul class="polo-lista">`;
+    advs.forEach(adv => {
+      const oabTxt = adv.oab ? ` — OAB: ${esc(adv.oab)}` : '';
+      h += `<li><span class="adv">${esc(adv.nome || 'N/D')}${oabTxt}</span></li>`;
     });
     h += `</ul>`;
     return h;
@@ -107,9 +235,20 @@ function gerarHTML(estado, numero, processos, nomeAdvogado) {
     const numRaw      = p.numero || p.numeroProcesso || 'N/D';
     const num         = formatarNumeroProcesso(numRaw);
     const link        = `https://supremodoseteoriginal.com/?processo=${num}`;
-    const poloAtivo   = (p.partes || []).filter(x => ['AT','ATIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
-    const poloPassivo = (p.partes || []).filter(x => ['PA','PASSIVO'].includes((x.polo || x.tipoPolo || '').toUpperCase()));
-    const valor       = p.valor ? `R$ ${esc(p.valor)}` : 'N/D';
+    const todasPartes = p.partes || [];
+    const poloAtivo   = todasPartes.filter(x => {
+      const polo = (x.polo || x.tipoPolo || x.tipo || '').toUpperCase();
+      return polo.includes('ATIV') || polo.includes('AUTO') || polo.includes('REQUERENTE') || polo === 'AT';
+    });
+    const poloPassivo = todasPartes.filter(x => {
+      const polo = (x.polo || x.tipoPolo || x.tipo || '').toUpperCase();
+      return polo.includes('PASSIV') || polo.includes('RÉU') || polo.includes('REU') || polo.includes('REQUERIDO') || polo === 'PA';
+    });
+    // Partes sem polo definido (vindo do scraper TJSP)
+    const semPolo = todasPartes.filter(x => !x.polo && !x.tipoPolo && !x.tipo);
+
+    const valor = p.valor_display || (p.valor ? `R$ ${esc(p.valor)}` : 'N/D');
+    const advsTJSP = p.advogados_tjsp || [];
 
     return `<div class="card">
   <div class="proc-num">PROCESSO: ${esc(num)}</div>
@@ -117,12 +256,15 @@ function gerarHTML(estado, numero, processos, nomeAdvogado) {
   <div class="row">⚖️ <b>TRIBUNAL:</b> ${esc(p.tribunal || 'N/D')}</div>
   <div class="row">📁 <b>CLASSE:</b> ${esc(p.classe || 'N/D')}</div>
   <div class="row">📌 <b>ASSUNTO:</b> ${esc(p.assunto || 'N/D')}</div>
-  <div class="row">💰 <b>VALOR:</b> ${valor}</div>
+  <div class="row">💰 <b>VALOR DA CAUSA:</b> <b style="color:#4ade80">${esc(valor)}</b></div>
   <div class="row">📅 <b>DATA INÍCIO:</b> ${esc(formatarData(p.data || p.dataAjuizamento))}</div>
   <div class="row">📅 <b>ÚLTIMA MOVIMENTAÇÃO:</b> ${esc(formatarData(p.dataUltimaMovimentacao || p.ultimaMovimentacao))}</div>
   <div class="row">👨‍⚖️ <b>ÓRGÃO JULGADOR:</b> ${esc(p.orgao || 'N/D')}</div>
-  ${poloAtivo.length   > 0 ? renderPartes(poloAtivo,   '👤 POLO ATIVO:')   : ''}
-  ${poloPassivo.length > 0 ? renderPartes(poloPassivo, '👤 POLO PASSIVO:') : ''}
+  ${poloAtivo.length  > 0 ? renderPartes(poloAtivo,  '👤 POLO ATIVO:')   : ''}
+  ${poloPassivo.length> 0 ? renderPartes(poloPassivo,'👤 POLO PASSIVO:') : ''}
+  ${semPolo.length    > 0 ? renderPartes(semPolo,    '👥 PARTES:')       : ''}
+  ${advsTJSP.length   > 0 && semPolo.length === 0 && poloAtivo.length === 0 && poloPassivo.length === 0
+      ? renderAdvogados(advsTJSP) : ''}
 </div>`;
   }).join('\n');
 
@@ -202,10 +344,17 @@ async function processarOAB(token, chatId, estado, numero) {
       return;
     }
 
-    await enviarMensagem(token, chatId, `✅ *Encontrados ${total} processos*\n📁 Gerando arquivo HTML...`);
+    const temTJSP = processos.some(p => (p.tribunal || '').toUpperCase().includes('TJSP'));
+    let processosFinais = processos;
+    if (temTJSP) {
+      await enviarMensagem(token, chatId, `✅ *Encontrados ${total} processos*\n🔍 Buscando dados completos no TJSP...`);
+      processosFinais = await enriquecerListaTJSP(processos);
+    } else {
+      await enviarMensagem(token, chatId, `✅ *Encontrados ${total} processos*\n📁 Gerando arquivo HTML...`);
+    }
 
     const nomeArq  = `OAB_${estado}${numero}_processos.html`;
-    const conteudo = gerarHTML(estado, numero, processos, adv?.nome);
+    const conteudo = gerarHTML(estado, numero, processosFinais, adv?.nome);
     const kb       = (Buffer.byteLength(conteudo, 'utf8') / 1024).toFixed(1);
 
     await enviarArquivo(token, chatId, nomeArq, conteudo,
